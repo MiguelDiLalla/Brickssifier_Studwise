@@ -29,36 +29,36 @@ class TestModelUtilsLocal(unittest.TestCase):
                             except Exception as e:
                                 logging.error(f"[CLEAN] Failed to clean EXIF for {file_path}: {e}")
 
-        # # Set up test bricks image path
-        # bricks_folder = os.path.join(os.getcwd(), "presentation", "Test_images", "BricksPics")
-        # files = [f for f in os.listdir(bricks_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        # self.test_bricks_image_path = os.path.join(bricks_folder, random.choice(files))
-        # if not os.path.exists(self.test_bricks_image_path):
-        #     self.skipTest(f"Test image not found: {self.test_bricks_image_path}")
-        # logging.info(f"[SETUP] Test image located at: {self.test_bricks_image_path}")
+        # Set up test bricks image path
+        bricks_folder = os.path.join(os.getcwd(), "presentation", "Test_images", "BricksPics")
+        files = [f for f in os.listdir(bricks_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        self.test_bricks_image_path = os.path.join(bricks_folder, random.choice(files))
+        if not os.path.exists(self.test_bricks_image_path):
+            self.skipTest(f"Test image not found: {self.test_bricks_image_path}")
+        logging.info(f"[SETUP] Test image located at: {self.test_bricks_image_path}")
         
-        # # Read bricks image as a numpy array for later testing
-        # self.test_bricks_image = cv2.imread(self.test_bricks_image_path)
-        # if self.test_bricks_image is None:
-        #     self.skipTest("Failed to load test image as numpy array.")
+        # Read bricks image as a numpy array for later testing
+        self.test_bricks_image = cv2.imread(self.test_bricks_image_path)
+        if self.test_bricks_image is None:
+            self.skipTest("Failed to load test image as numpy array.")
 
         #------------------------------------------
 
-        # Set up test studs image path
-        studs_folder = os.path.join(os.getcwd(), "presentation", "Test_images", "StudsPics")
-        files = [f for f in os.listdir(studs_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        self.test_studs_image_path = os.path.join(studs_folder, random.choice(files))
-        if not os.path.exists(self.test_studs_image_path):
-            self.skipTest(f"Test image not found: {self.test_studs_image_path}")
-        logging.info(f"[SETUP] Test image located at: {self.test_studs_image_path}")
+        # # Set up test studs image path
+        # studs_folder = os.path.join(os.getcwd(), "presentation", "Test_images", "StudsPics")
+        # files = [f for f in os.listdir(studs_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        # self.test_studs_image_path = os.path.join(studs_folder, random.choice(files))
+        # if not os.path.exists(self.test_studs_image_path):
+        #     self.skipTest(f"Test image not found: {self.test_studs_image_path}")
+        # logging.info(f"[SETUP] Test image located at: {self.test_studs_image_path}")
         
-        # Read image as a numpy array for later testing
-        self.test_studs_image = cv2.imread(self.test_studs_image_path)
-        if self.test_studs_image is None:
-            self.skipTest("Failed to load test image as numpy array.")
+        # # Read image as a numpy array for later testing
+        # self.test_studs_image = cv2.imread(self.test_studs_image_path)
+        # if self.test_studs_image is None:
+        #     self.skipTest("Failed to load test image as numpy array.")
         
-        self.test_studs_specific_image_path = os.path.join(os.getcwd(), "presentation", "Test_images", "StudsPics", "image_28_LegoBrick_0_c88.jpg")
-        self.test_studs_specific_image = cv2.imread(self.test_studs_specific_image_path)
+        # self.test_studs_specific_image_path = os.path.join(os.getcwd(), "presentation", "Test_images", "StudsPics", "image_28_LegoBrick_0_c88.jpg")
+        # self.test_studs_specific_image = cv2.imread(self.test_studs_specific_image_path)
         # ----------------------------------------------
 
         # Set output directory for test results
@@ -93,27 +93,27 @@ class TestModelUtilsLocal(unittest.TestCase):
     #     self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created.")
     #     self.assertTrue(os.path.exists(json_path), "Metadata JSON file not created.")
     
-    # def test_detect_bricks_via_numpy(self):
-    #     logging.info("[TEST] Running detect_bricks() using image as NumPy array.")
-    #     # Call detect_bricks by passing the numpy array (not a file path)
-    #     result = model_utils.detect_bricks(
-    #         self.test_bricks_image, 
-    #         model=None, 
-    #         conf=0.25, 
-    #         save_json=True, 
-    #         save_annotated=True, 
-    #         output_folder=self.output_dir
-    #     )
-    #     meta = result.get("metadata", {})
-    #     composite_path = meta.get("annotated_image_path", "")
-    #     json_path = meta.get("json_results_path", "")
-    #     logging.info(f"[TEST] Composite image path (numpy input): {composite_path}")
-    #     logging.info(f"[TEST] Metadata JSON path (numpy input): {json_path}")
-    #     # NEW: Print full metadata dictionary for inspection
-    #     print("\n[DEBUG] Metadata (from NumPy array detection):")
-    #     # print(json.dumps(meta, indent=4))
-    #     self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created (via NumPy).")
-    #     self.assertTrue(os.path.exists(json_path), "Metadata JSON file not created (via NumPy).")
+    def test_detect_bricks_via_numpy(self):
+        logging.info("[TEST] Running detect_bricks() using image as NumPy array.")
+        # Call detect_bricks by passing the numpy array (not a file path)
+        result = model_utils.detect_bricks(
+            self.test_bricks_image, 
+            model=None, 
+            conf=0.25, 
+            save_json=True, 
+            save_annotated=True, 
+            output_folder=self.output_dir
+        )
+        meta = result.get("metadata", {})
+        composite_path = meta.get("annotated_image_path", "")
+        json_path = meta.get("json_results_path", "")
+        logging.info(f"[TEST] Composite image path (numpy input): {composite_path}")
+        logging.info(f"[TEST] Metadata JSON path (numpy input): {json_path}")
+        # NEW: Print full metadata dictionary for inspection
+        print("\n[DEBUG] Metadata (from NumPy array detection):")
+        # print(json.dumps(meta, indent=4))
+        self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created (via NumPy).")
+        self.assertTrue(os.path.exists(json_path), "Metadata JSON file not created (via NumPy).")
     
     # def test_render_metadata(self):
     #     logging.info("[TEST] Testing render_metadata() function directly.")
@@ -233,40 +233,40 @@ class TestModelUtilsLocal(unittest.TestCase):
     #         except Exception as e:
     #             logging.error(f"Failed to open image: {e}")
 
-    def test_detect_studs_via_numpy(self):
-        logging.info("[TEST] Running detect_studs() using image as NumPy array.")
-        # Call detect_bricks by passing the numpy array (not a file path)
-        result = model_utils.detect_studs(
-            self.test_studs_image, 
-            model=None, 
-            conf=0.25, 
-            save_annotated=True, 
-            output_folder=self.output_dir
-        )
-        meta = result.get("metadata", {})
-        composite_path = meta.get("annotated_image_path", "")
-        logging.info(f"[TEST] Composite image path (numpy input): {composite_path}")
-        logging.info(f"[TEST] Dimension: {meta.get('dimension', 'NOHAY')}")
-        # NEW: Print full metadata dictionary for inspection
-        print("\n[DEBUG] Metadata (from NumPy array detection):")
-        filtered_meta = {k: v for k, v in meta.items() if k != 'boxes_coordinates'}
-        print(json.dumps(filtered_meta, indent=4))
-        self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created (via NumPy).")
+    # def test_detect_studs_via_numpy(self):
+    #     logging.info("[TEST] Running detect_studs() using image as NumPy array.")
+    #     # Call detect_bricks by passing the numpy array (not a file path)
+    #     result = model_utils.detect_studs(
+    #         self.test_studs_image, 
+    #         model=None, 
+    #         conf=0.25, 
+    #         save_annotated=True, 
+    #         output_folder=self.output_dir
+    #     )
+    #     meta = result.get("metadata", {})
+    #     composite_path = meta.get("annotated_image_path", "")
+    #     logging.info(f"[TEST] Composite image path (numpy input): {composite_path}")
+    #     logging.info(f"[TEST] Dimension: {meta.get('dimension', 'NOHAY')}")
+    #     # NEW: Print full metadata dictionary for inspection
+    #     print("\n[DEBUG] Metadata (from NumPy array detection):")
+    #     filtered_meta = {k: v for k, v in meta.items() if k != 'boxes_coordinates'}
+    #     print(json.dumps(filtered_meta, indent=4))
+    #     self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created (via NumPy).")
 
-        # if in visual studio, open the composite_path
-        # Try to open the image in the default viewer if it exists
-        if os.path.exists(composite_path):
-            try:
-                if os.name == 'nt':  # Windows
-                    os.startfile(composite_path)
-                elif os.name == 'posix':  # macOS or Linux
-                    if 'darwin' in os.sys.platform:  # macOS
-                        subprocess.call(['open', composite_path])
-                    else:  # Linux
-                        subprocess.call(['xdg-open', composite_path])
-                logging.info(f"Opened annotated image: {composite_path}")
-            except Exception as e:
-                logging.error(f"Failed to open image: {e}")
+    #     # if in visual studio, open the composite_path
+    #     # Try to open the image in the default viewer if it exists
+    #     if os.path.exists(composite_path):
+    #         try:
+    #             if os.name == 'nt':  # Windows
+    #                 os.startfile(composite_path)
+    #             elif os.name == 'posix':  # macOS or Linux
+    #                 if 'darwin' in os.sys.platform:  # macOS
+    #                     subprocess.call(['open', composite_path])
+    #                 else:  # Linux
+    #                     subprocess.call(['xdg-open', composite_path])
+    #             logging.info(f"Opened annotated image: {composite_path}")
+    #         except Exception as e:
+    #             logging.error(f"Failed to open image: {e}")
 
     # def test_detect_studs_target_brick(self):
 

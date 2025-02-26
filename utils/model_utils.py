@@ -784,13 +784,20 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
             output_folder = os.path.join(os.getcwd(), "results", "bricks")
         os.makedirs(output_folder, exist_ok=True)
         
+        # if save_annotated:
+        #     rendered_metadata = render_metadata(annotated_image, metadata)
+        #     composite_image = composite_inference_branded_image(annotated_image, rendered_metadata)
+        #     composite_path = os.path.join(output_folder, "composite_image.jpg")
+        #     cv2.imwrite(composite_path, composite_image)
+        #     metadata["annotated_image_path"] = composite_path
+        #     logger.info("💾 Composite image saved at: %s", composite_path)
+
         if save_annotated:
-            rendered_metadata = render_metadata(annotated_image, metadata)
-            composite_image = composite_inference_branded_image(annotated_image, rendered_metadata)
-            composite_path = os.path.join(output_folder, "composite_image.jpg")
-            cv2.imwrite(composite_path, composite_image)
-            metadata["annotated_image_path"] = composite_path
-            logger.info("💾 Composite image saved at: %s", composite_path)
+            annotated_path = os.path.join(output_folder, "annotated_image.jpg")
+            cv2.imwrite(annotated_path, annotated_image)
+            metadata["annotated_image_path"] = annotated_path
+            logger.info("💾 Annotated image saved at: %s", annotated_path)
+
         if save_json:
             json_path = os.path.join(output_folder, "metadata.json")
             with open(json_path, "w") as json_file:
