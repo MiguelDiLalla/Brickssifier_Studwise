@@ -180,22 +180,25 @@ def read_exif(image_path, TREE=config["EXIF_METADATA_DEFINITIONS"]):
       dict: Parsed metadata.
     """
     # Use default EXIF DEFINITIONS from CONFIG if TREE is None
-    
+    if "image0.jpg" in image_path :
+        logger.info("🆕 Using numpy array source.")
+        return {}
+
     if TREE is None:
         TREE = config["EXIF_METADATA_DEFINITIONS"]
 
     try:
-        image = Image.open(image_path)
+        with Image.open(image_path) as image:
+            exif_bytes = image.info.get("exif")
+            if not exif_bytes:
+                logger.warning("⚠️ No EXIF data found in %s", image_path)
+                return {}
+
+            exif_dict = piexif.load(exif_bytes)
     except Exception as e:
-        logger.error("❌ Failed to open image %s: %s", image_path, e)
+        logger.error("❌ Failed to open image %s > %s", image_path, e)
         return {}
 
-    exif_bytes = image.info.get("exif")
-    if not exif_bytes:
-        logger.warning("⚠️ No EXIF data found in %s", image_path)
-        return {}
-
-    exif_dict = piexif.load(exif_bytes)
     user_comment_tag = piexif.ExifIFD.UserComment
     user_comment = exif_dict.get("Exif", {}).get(user_comment_tag, b"")
     if not user_comment:
@@ -221,7 +224,7 @@ def read_exif(image_path, TREE=config["EXIF_METADATA_DEFINITIONS"]):
 def write_exif(image_path, metadata):
     """
     Writes metadata to the image's EXIF UserComment tag.
-    Erases any existing UserComment data and resets 'TimesScanned' to 1. ✍️
+    Updates 'TimesScanned' based on previous metadata. ✍️
     """
     try:
         image = Image.open(image_path)
@@ -237,9 +240,13 @@ def write_exif(image_path, metadata):
 
     user_comment_tag = piexif.ExifIFD.UserComment
 
-    # Erase any existing metadata in UserComment and reset scan count
-    metadata["TimesScanned"] = 1
-    logger.info("🆕 Setting TimesScanned to 1 for image %s (existing metadata erased)", image_path)
+    # Update TimesScanned based on previous metadata in UserComment
+    prev_meta = read_exif(image_path) if image_path != "Image0.jpg" else {}
+    if prev_meta and "TimesScanned" in prev_meta:
+        metadata["TimesScanned"] = prev_meta["TimesScanned"] + 1
+    else:
+        metadata["TimesScanned"] = 1
+    logger.info("🆕 Setting TimesScanned to %d for image %s", metadata["TimesScanned"], image_path)
 
     formatted_metadata = json.dumps(metadata, indent=4)
     encoded_metadata = formatted_metadata.encode('utf-8')
@@ -275,22 +282,52 @@ def extract_metadata_from_yolo_result(results, orig_image):
     image_path = results[0].path if hasattr(results[0], "path") and results[0].path else ""
 
     previous_metadata = {}
-    if image_path:
+    if image_path != "Image0.jpg":
         try:
             previous_metadata = read_exif(image_path)
         except Exception as e:
             logger.error("❌ Error reading EXIF from %s: %s", image_path, e)
             previous_metadata = {}
+    else:
+        logger.warning("💡 No previous Scans to read, you inputed a numpy array")
 
     times_scanned = previous_metadata.get("TimesScanned", 0)
     times_scanned = times_scanned + 1 if times_scanned else 1
 
     message_value = "Muchas gracias por ejecutar la DEMO del projecto"
+    # Retrieve additional details from YOLO results
+    boxes_np = results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([])
+    confidences_np = results[0].boxes.conf.cpu().numpy() if hasattr(results[0].boxes, "conf") and results[0].boxes.conf is not None else np.array([])
+    classes_np = results[0].boxes.cls.cpu().numpy() if hasattr(results[0].boxes, "cls") and results[0].boxes.cls is not None else np.array([])
+
+    # Build detailed information for each detection
+    boxes = []
+    for idx, box in enumerate(boxes_np):
+        box_info = {
+            "coordinates": box.tolist(),
+            "confidence": float(confidences_np[idx]) if idx < len(confidences_np) else None,
+            "class": int(classes_np[idx]) if idx < len(classes_np) else None
+        }
+        boxes.append(box_info)
+    speed_data = results[0].speed if hasattr(results[0], "speed") else {"preprocess": 0.0, "inference": 0.0, "postprocess": 0.0}
+    # Get class names from results
+    class_names = results[0].names if hasattr(results[0], "names") else {}
+    
+    
+
+    if isinstance(class_names, dict):
+        class_names = list(class_names.values())
+
+
+    mode_value = class_names[0] if class_names else "obj"
+
     metadata = {
-        "boxes_coordinates": {str(idx): box.tolist() for idx, box in enumerate(boxes)},
+        "boxes_coordinates": {str(idx): box for idx, box in enumerate(boxes)},
         "orig_shape": shape,
-        "speed": {"preprocess": 0.0, "inference": 0.0, "postprocess": 0.0},
-        "mode": "bricks",
+        "speed": {"preprocess": speed_data.get("preprocess", 0.0), 
+                  "inference": speed_data.get("inference", 0.0), 
+                  "postprocess": speed_data.get("postprocess", 0.0)},
+        "mode": mode_value,
         "path": image_path,
         "os_full_version_name": platform.platform(),
         "processor": platform.processor(),
@@ -473,6 +510,81 @@ def composite_inference_branded_image(annotated_image, rendered_metadata, margin
                                            borderType=cv2.BORDER_CONSTANT, value=(0, 0, 255))
     return composite_image
 
+# =============================================================================
+# annotate_image Function
+# =============================================================================
+
+def annotate_scanned_image(image_path):
+    """
+    Annotates the provided image with the metadata retrieved via read_exif().
+    Adds the project logo to the bottom.
+    """
+    # Load image from path
+    image = cv2.imread(image_path)
+    if image is None:
+        logger.error("❌ Failed to load image for annotation: %s", image_path)
+        return None
+
+    # Retrieve full metadata using read_exif()
+    metadata = read_exif(image_path)
+
+    label = metadata.get('mode', 'Label not found')
+    if label != 'Label not found':
+        label = label[:-1]
+
+    for key, box_info in metadata.get('boxes_coordinates', {}).items():
+        if isinstance(box_info, dict):
+            coords = box_info.get("coordinates", [])
+        elif isinstance(box_info, list):
+            coords = box_info
+        else:
+            coords = []
+
+        if len(coords) == 4:
+            x1, y1, x2, y2 = map(int, coords)
+            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(image, f"{label}", (x1, y1-10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+
+    # Add the logo to the bottom of the image
+    logo = config["LOGO_NUMPY"]
+    if logo is not None:
+        # Convert the logo from black and white to red and white:
+        colored_logo = logo.copy()
+        # Identify "black" pixels (assumes near-zero values indicate black)
+        black_mask = (colored_logo[:, :, 0] < 128) & (colored_logo[:, :, 1] < 128) & (colored_logo[:, :, 2] < 128)
+        # Set these black pixels to red (BGR: (0, 0, 255))
+        colored_logo[black_mask] = [0, 0, 255]
+        logo = colored_logo
+
+        img_h, img_w, _ = image.shape
+        logo_height, logo_width, _ = logo.shape
+        # Resize the annotated image to match the logo's width (preserve aspect ratio)
+        new_img_h = int(img_h * (logo_width / img_w))
+        resized_image = cv2.resize(image, (logo_width, new_img_h))
+        # Combine the resized image and the logo vertically
+        composite_image = np.vstack((resized_image, logo))
+        # Add a red margin to the composite image
+        composite_image = cv2.copyMakeBorder(composite_image, 10, 10, 10, 10,
+                                             cv2.BORDER_CONSTANT, value=(0, 0, 255))
+        
+        # print all paths avalaible in the metadata after validating each one
+        for key, value in metadata.items():
+            if key == "annotated_image_path" and value != "":
+                logger.info("📂 Annotated image path: %s", value)
+            if key == "json_results_path" and value != "":
+                logger.info("📂 JSON results path: %s", value)
+            if key == "path" and value != "":
+                logger.info("📂 Original image path: %s", value)
+
+        return composite_image
+    
+    else:
+        logger.warning("⚠️ No logo available for annotation.")
+
+    return image
+
 
 # =============================================================================
 # Brick Detection Function
@@ -510,9 +622,11 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
         orig_image = image.copy()
         annotated_image = image.copy()
         results = model.predict(source=image, conf=conf)
+        if isinstance(image_input, str):
+            results[0].path = image_input
         boxes_np = (results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([]))
         if boxes_np.size == 0:
-            logger.warning("⚠️ No detections found. Using dummy detection.")
+            logger.warning("⚠️ No detections found.")
             boxes_np = np.array([[10, 10, 100, 100]])
 
         annotated_image = results[0].plot() 
@@ -565,19 +679,178 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
 # Placeholder Functions for Stud Detection and Dimension Classification
 # =============================================================================
 
-def classify_dimensions(image):
+def classify_dimensions(results, orig_image, dimension_map=config["STUDS_TO_DIMENSIONS_MAP"]):
     """
-    Placeholder for dimension classification logic.
+    Classifies the brick dimension based on detected stud positions.
+    ...
     """
-    # ...existing code...
-    return None
+    studs = results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([])
+    
+    num_studs = len(studs)
+    valid_stud_counts = dimension_map.keys()
+    if num_studs not in valid_stud_counts:
+        logger.error(f"[ERROR] Deviant number of studs detected ({num_studs}). Returning 'Error'.")
+        return "Error"
 
-def detect_studs(image):
+    if num_studs in valid_stud_counts and isinstance(dimension_map[num_studs], str):
+        logger.info(f"[INFO] Detected {num_studs} studs. Dimension: {dimension_map[num_studs]}.")
+        # type the dimension on the image
+        annotated_image = results[0].plot(labels=False)  # original_image.copy()
+        h, w = annotated_image.shape[:2]
+        text = f"{dimension_map[num_studs]}"
+        # Position in bottom right with margin
+        font_size = 0.5
+        text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_size, 2)[0]
+        text_x = w - text_size[0] - 10
+        text_y = h - 10
+        cv2.putText(annotated_image, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
+                    font_size, (0, 255, 0), 2)
+        return {
+            "dimension": dimension_map[num_studs],
+            "annotated_image": annotated_image
+        }
+    if num_studs in valid_stud_counts and isinstance(dimension_map[num_studs], list):
+        # Process centers and regression line:
+        centers = [((x1 + x2) / 2, (y1 + y2) / 2) for x1, y1, x2, y2 in studs]
+        box_sizes = [((x_max - x_min + y_max - y_min) / 2) for x_min, y_min, x_max, y_max in studs]
+        xs, ys = zip(*centers)
+        m, b = np.polyfit(xs, ys, 1)
+        deviations = [abs(y - (m * x + b)) for x, y in centers]
+        threshold = np.mean(box_sizes) / 2
+        classification_aux = "Nx1" if max(deviations) < threshold else "Nx2"
+        logger.info(f"[DEBUG] Detected {num_studs} studs. Classification: {classification_aux}.")
+        print(dimension_map[num_studs])
+        possible_dimensions = [dimension_map[num_studs][1] if classification_aux == "Nx1" else dimension_map[num_studs][0]]
+        logger.info(f"[INFO] Classification: {classification_aux}. Final dimension: {possible_dimensions[0]}.")
+
+        annotated_image = orig_image.copy()
+        for x, y in centers:
+            cv2.circle(annotated_image, (int(x), int(y)), 3, (0, 255, 0), -1)
+        x1 = 0
+        y1 = int(m * x1 + b)
+        x2 = annotated_image.shape[1]
+        y2 = int(m * x2 + b)
+        cv2.line(annotated_image, (x1, y1), (x2, y2), (255, 0, 0), 2)
+        
+        # Add dimension text in bottom right corner with half size
+        h, w = annotated_image.shape[:2]
+        text = f"{possible_dimensions[0]}"
+        font_size = 0.5
+        text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_size, 2)[0]
+        text_x = w - text_size[0] - 10
+        text_y = h - 10
+        cv2.putText(annotated_image, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
+                    font_size, (0, 255, 0), 2)
+
+        return {
+            "dimension": possible_dimensions[0],
+            "annotated_image": annotated_image
+        }
+
+def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, output_folder=""):
     """
-    Placeholder for stud detection logic.
+    Follows the same logic as detect_bricks but uses the studs model.
+    It incorporates the classify_dimensions function to add the "dimension"
+    key to the metadata. If classify_dimensions returns a dictionary, the
+    annotated image is substituted by the one in that dictionary.
+
+    In this case, cropping bounding boxes is not necessary.
+    The function also uses the image composition functions to add metadata and logo.
     """
-    # ...existing code...
-    return None
+    # message if output folder is not provided
+    if not output_folder:
+        logger.warning("⚠️ No output folder provided. Results will not be saved.")
+
+
+    if model is None:
+        model = config.get("LOADED_MODELS", {}).get("studs")
+        if model is None:
+            logger.error("❌ No studs model loaded.")
+            return None
+
+    if isinstance(image_input, str):
+        image = cv2.imread(image_input)
+        if image is None:
+            logger.error("❌ Failed to load image from path: %s", image_input)
+            return None
+    else:
+        image = image_input
+
+    try:
+        orig_image = image.copy()
+        annotated_image = image.copy()
+        results = model.predict(source=image, conf=conf)
+        if isinstance(image_input, str):
+            results[0].path = image_input
+        boxes_np = (results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([]))
+        if boxes_np.size == 0:
+            logger.warning("⚠️ No detections found.")
+            boxes_np = np.array([[10, 10, 100, 100]])
+
+        annotated_image = results[0].plot(labels=False)
+ 
+        
+        
+        # cropped_detections = []
+        # for idx, box in enumerate(boxes_np):
+        #     x1, y1, x2, y2 = map(int, box[:4])
+        #     crop = orig_image[y1:y2, x1:x2]
+        #     cropped_detections.append(crop)
+        #     # cv2.rectangle(orig_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        #     # cv2.putText(orig_image, f"Brick {idx}", (x1, y1-10),
+        #     #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        metadata = extract_metadata_from_yolo_result(results, orig_image)
+
+        if not output_folder:
+            output_folder = os.path.join(os.getcwd(), "results", "studs")
+        os.makedirs(output_folder, exist_ok=True)
+        
+        
+        # if save_json:
+        #     json_path = os.path.join(output_folder, "metadata.json")
+        #     with open(json_path, "w") as json_file:
+        #         json.dump(metadata, json_file, indent=4)
+        #     metadata["json_results_path"] = json_path
+        #     logger.info("💾 Metadata JSON saved at: %s", json_path)
+
+        if isinstance(image_input, str):
+            write_exif(image_input, metadata)
+        elif save_annotated and metadata.get("annotated_image_path"):
+            write_exif(metadata["annotated_image_path"], metadata)
+        
+        # Classify dimensions based on detected studs
+        dimension_result = classify_dimensions(results, orig_image)
+
+
+        # Process dimension classification results and save annotated image if requested
+        if isinstance(dimension_result, dict):
+            # Extract dimension and use the provided annotated image with regression line
+            metadata["dimension"] = dimension_result.get("dimension", "Error")
+            annotated_image = dimension_result.get("annotated_image", annotated_image)
+        elif isinstance(dimension_result, str):
+            # String result means either a direct dimension or error message
+            metadata["dimension"] = dimension_result
+        
+        # Save annotated image if requested
+        if save_annotated:
+            # Create and save the annotated image
+            annotated_path = os.path.join(output_folder, "annotated_image.jpg")
+            cv2.imwrite(annotated_path, annotated_image)
+            metadata["annotated_image_path"] = annotated_path
+            logger.info("💾 Annotated image saved at: %s", annotated_path)
+        
+
+        return {
+            "orig_image": orig_image,
+            "annotated_image": annotated_image,
+            "dimension": metadata.get("dimension", "Error"),
+            # "cropped_detections": cropped_detections,
+            "metadata": metadata
+        }
+    except Exception as e:
+        logger.error("❌ Error during studs detection: %s", e)
+        return None
+
 
 # =============================================================================
 # Metadata Rendering Functions
