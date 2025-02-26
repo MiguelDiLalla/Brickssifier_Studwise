@@ -9,10 +9,26 @@ import random
 import subprocess
 
 # Configure logging for testing
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname=s - %(message)s')
+
+CLEAN_METADATA = False
 
 class TestModelUtilsLocal(unittest.TestCase):
     def setUp(self):
+        # New: Clean EXIF metadata in bricks and studs folders if CLEAN_METADATA is True
+        if CLEAN_METADATA:
+            for folder in ["presentation/Test_images/BricksPics", "presentation/Test_images/StudsPics"]:
+                full_folder = os.path.join(os.getcwd(), folder)
+                if os.path.exists(full_folder):
+                    for f in os.listdir(full_folder):
+                        if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                            file_path = os.path.join(full_folder, f)
+                            try:
+                                model_utils.clean_exif_metadata(file_path)
+                                logging.info(f"[CLEAN] Cleaned EXIF for: {file_path}")
+                            except Exception as e:
+                                logging.error(f"[CLEAN] Failed to clean EXIF for {file_path}: {e}")
+
         # # Set up test bricks image path
         # bricks_folder = os.path.join(os.getcwd(), "presentation", "Test_images", "BricksPics")
         # files = [f for f in os.listdir(bricks_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
@@ -58,7 +74,7 @@ class TestModelUtilsLocal(unittest.TestCase):
     #     logging.info("[TEST] Running detect_bricks() using image path input.")
     #     # Call detect_bricks by passing the image path
     #     result = model_utils.detect_bricks(
-    #         self.test_image_path, 
+    #         self.test_bricks_image_path, 
     #         model=None,             # Should default to loaded brick model from local mode
     #         conf=0.25, 
     #         save_json=True, 
@@ -81,7 +97,7 @@ class TestModelUtilsLocal(unittest.TestCase):
     #     logging.info("[TEST] Running detect_bricks() using image as NumPy array.")
     #     # Call detect_bricks by passing the numpy array (not a file path)
     #     result = model_utils.detect_bricks(
-    #         self.test_image, 
+    #         self.test_bricks_image, 
     #         model=None, 
     #         conf=0.25, 
     #         save_json=True, 
@@ -170,27 +186,72 @@ class TestModelUtilsLocal(unittest.TestCase):
     #         logging.warning("⚠️ No images with EXIF data found in the bricks_folder.")
 
 
-    def test_detect_studs_via_path(self):
-        logging.info("[TEST] Running detect_bricks() using image path input.")
-        # Call detect_bricks by passing the image path
+    # def test_detect_studs_via_path(self):
+    #     logging.info("[TEST] Running detect_bricks() using image path input.")
+    #     # Call detect_bricks by passing the image path
+    #     result = model_utils.detect_studs(
+    #         self.test_studs_image_path, 
+    #         model=None,             # Should default to loaded brick model from local mode
+    #         conf=0.25, 
+    #         save_annotated=True, 
+    #         output_folder=self.output_dir
+    #     )
+        
+    #     # if results is str then there was no detections
+    #     if isinstance(result, str):
+    #         logging.info(f"[TEST] No studs detected in image: {self.test_studs_image_path}")
+    #         return
+            
+
+    #     if result is None:
+    #         logging.error("[TEST] Result is None, skipping further checks.")
+    #         return
+        
+    #     meta = result.get("metadata", {})
+    #     composite_path = meta.get("annotated_image_path", "")
+
+    #     logging.info(f"[TEST] Composite image path: {composite_path}")
+    #     logging.info(f"[TEST] Dimension: {meta.get('dimension', 'NOHAY')}")
+    #     # NEW: Print full metadata dictionary for inspection
+    #     print("\n[DEBUG] Metadata (from image path detection):")
+    #     filtered_meta = {k: v for k, v in meta.items() if k != 'boxes_coordinates'}
+    #     print(json.dumps(filtered_meta, indent=4))
+    #     # self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created.")
+
+    #     # if in visual studio, open the composite_path
+    #     # Try to open the image in the default viewer if it exists
+    #     if os.path.exists(composite_path):
+    #         try:
+    #             if os.name == 'nt':  # Windows
+    #                 os.startfile(composite_path)
+    #             elif os.name == 'posix':  # macOS or Linux
+    #                 if 'darwin' in os.sys.platform:  # macOS
+    #                     subprocess.call(['open', composite_path])
+    #                 else:  # Linux
+    #                     subprocess.call(['xdg-open', composite_path])
+    #             logging.info(f"Opened annotated image: {composite_path}")
+    #         except Exception as e:
+    #             logging.error(f"Failed to open image: {e}")
+
+    def test_detect_studs_via_numpy(self):
+        logging.info("[TEST] Running detect_studs() using image as NumPy array.")
+        # Call detect_bricks by passing the numpy array (not a file path)
         result = model_utils.detect_studs(
-            self.test_studs_image_path, 
-            model=None,             # Should default to loaded brick model from local mode
+            self.test_studs_image, 
+            model=None, 
             conf=0.25, 
             save_annotated=True, 
             output_folder=self.output_dir
         )
-        # Check that a composite annotated image was created and metadata JSON exists
         meta = result.get("metadata", {})
         composite_path = meta.get("annotated_image_path", "")
-
-        logging.info(f"[TEST] Composite image path: {composite_path}")
-        logging.info(f"[TEST] Dimension: {meta.get('dimension', '')}")
+        logging.info(f"[TEST] Composite image path (numpy input): {composite_path}")
+        logging.info(f"[TEST] Dimension: {meta.get('dimension', 'NOHAY')}")
         # NEW: Print full metadata dictionary for inspection
-        print("\n[DEBUG] Metadata (from image path detection):")
+        print("\n[DEBUG] Metadata (from NumPy array detection):")
         filtered_meta = {k: v for k, v in meta.items() if k != 'boxes_coordinates'}
         print(json.dumps(filtered_meta, indent=4))
-        # self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created.")
+        self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created (via NumPy).")
 
         # if in visual studio, open the composite_path
         # Try to open the image in the default viewer if it exists

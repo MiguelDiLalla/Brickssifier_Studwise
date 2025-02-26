@@ -586,11 +586,133 @@ def annotate_scanned_image(image_path):
     return image
 
 
+def read_detection(image_path):
+    """
+    Reads the detection results from the image's EXIF metadata.
+    Returns the detection results dictionary.
+    """
+    metadata = read_exif(image_path)
+    orig_image = cv2.imread(image_path)
+    
+    if not orig_image is not None:
+        logger.error("❌ Failed to load image from path: %s", image_path)
+        return None
+    
+    # Create a copy for annotation
+    annotated_image = orig_image.copy()
+    cropped_detections = []
+
+    # Check if metadata exists and has detection information
+    if not metadata:
+        logger.warning("⚠️ No EXIF metadata found in the image: %s", image_path)
+        return {
+            "orig_image": orig_image,
+            "annotated_image": orig_image,  # No annotations since no detections
+            "cropped_detections": [],
+            "metadata": {},
+            "status": "no_metadata"
+        }
+
+    if "boxes_coordinates" not in metadata or not metadata["boxes_coordinates"]:
+        logger.warning("⚠️ No detection information found in metadata for: %s", image_path)
+        return {
+            "orig_image": orig_image,
+            "annotated_image": orig_image,  # No annotations since no detections
+            "cropped_detections": [],
+            "metadata": metadata,
+            "status": "no_detections"
+        }
+    
+    name = metadata.get("mode", "Label not found")
+    label = name[:-1] if name == 'bricks' else name
+
+    # Process valid metadata with detections
+    for key, box_info in metadata["boxes_coordinates"].items():
+        if isinstance(box_info, dict):
+            coords = box_info.get("coordinates", [])
+        elif isinstance(box_info, list):
+            coords = box_info
+        else:
+            coords = []
+
+        if len(coords) == 4:
+            x1, y1, x2, y2 = map(int, coords)
+            cv2.rectangle(annotated_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            
+            conf = f"{box_info.get('confidence', 0.0):.2f}"
+            # Reduce font size by half if label is "stud"
+            font_size = 0.25 if label == "stud" else 0.5
+            cv2.putText(annotated_image, f"{label} {conf}", (x1, y1-10),
+                        cv2.FONT_HERSHEY_SIMPLEX, font_size, (0, 255, 0), 2)
+            
+            crop = orig_image[y1:y2, x1:x2]
+            cropped_detections.append(crop) 
+            
+            logger.info(f"📦 Detected crop from coordinates: {coords}")
+        else:
+            logger.warning("⚠️ Invalid coordinates found in metadata: %s", coords)
+        
+        # at the bottom right of the image add "NO MODEL RAN"
+        text_position = (annotated_image.shape[1] - 150, annotated_image.shape[0] - 10)
+        cv2.putText(annotated_image, "NO MODEL RAN", text_position, 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        # TYPE the dimensions detected if the label is "stud"
+    if label == "stud":
+        dimension = metadata.get("dimension", "Dimensions not found")
+        # Position the dimension text at the top left of the image
+        text_position = (10, 20)
+        cv2.putText(annotated_image, f"{dimension}", text_position, 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+        logger.info(f"📏 Dimensions for 'stud': {dimension}")
+        return {
+            "orig_image": orig_image,
+            "annotated_image": annotated_image,
+            # "cropped_detections": cropped_detections,
+            "metadata": metadata,
+            "dimensions": dimension,
+            "status": "success"
+        }
+    else:
+        return {
+            "orig_image": orig_image,
+            "annotated_image": annotated_image,
+            "cropped_detections": cropped_detections,
+            "metadata": metadata,
+            "status": "success"
+        }
+
+def clean_exif_metadata(image_path):
+    '''
+    removes the info inside the UserComment tag of the EXIF metadata
+    '''
+    metadata = read_exif(image_path)
+    if metadata == {}:
+        logger.warning("⚠️ No metadata found in the image: %s", image_path)
+        return
+    
+    #rewrite the image without UserComment tag
+    try:
+        with Image.open(image_path) as image:
+            exif_bytes = image.info.get("exif")
+            if not exif_bytes:
+                logger.warning("⚠️ No EXIF data found in %s", image_path)
+                return
+            else:
+                exif_dict = piexif.load(exif_bytes)
+                exif_dict["Exif"][piexif.ExifIFD.UserComment] = b""
+                new_exif_bytes = piexif.dump(exif_dict)
+                image.save(image_path, exif=new_exif_bytes)
+                logger.info("✅ EXIF metadata cleaned from %s", image_path)
+    except Exception as e:
+        logger.error("❌ Failed to clean EXIF metadata from %s: %s", image_path, e)
+    
+
+
 # =============================================================================
 # Brick Detection Function
 # =============================================================================
 
-def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder=""):
+def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder="", force_ran=False):
     """
     Performs brick detection using the provided YOLO model.
     Accepts either an image file path or a numpy array.
@@ -612,6 +734,22 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
 
     if isinstance(image_input, str):
         image = cv2.imread(image_input)
+        detection_results = read_detection(image_input)
+        if detection_results and detection_results.get("status") == "success":
+            logger.info("✅ Detected bricks from image: %s", image_input)
+            if save_annotated:
+                annotated_image = detection_results.get("annotated_image")
+                annotated_path = os.path.join(output_folder, "annotated_image.jpg")
+                cv2.imwrite(annotated_path, annotated_image)
+                logger.info("💾 Annotated image saved at: %s", annotated_path)
+                detection_results["metadata"]["annotated_image_path"] = annotated_path
+            if save_json:
+                json_path = os.path.join(output_folder, "metadata.json")
+                with open(json_path, "w") as json_file:
+                    json.dump(detection_results["metadata"], json_file, indent=4)
+                detection_results["metadata"]["json_results_path"] = json_path
+                logger.info("💾 Metadata JSON saved at: %s", json_path)
+            return detection_results
         if image is None:
             logger.error("❌ Failed to load image from path: %s", image_input)
             return None
@@ -760,7 +898,21 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
     # message if output folder is not provided
     if not output_folder:
         logger.warning("⚠️ No output folder provided. Results will not be saved.")
+    
+    # New: If image_input is a file path, try to retrieve cached detection from EXIF metadata
+    if isinstance(image_input, str):
+        image = cv2.imread(image_input)
+        detection_results = read_detection(image_input)
+        if detection_results and detection_results.get("status") == "success":
+            logger.info("Retrieving cached detection results from EXIF for studs detection.")
 
+            # if save_annotated:
+            #     annotated_image = detection_results.get("annotated_image")
+            #     annotated_path = os.path.join(output_folder, "annotated_image.jpg")
+            #     cv2.imwrite(annotated_path, annotated_image)
+            #     logger.info("💾 Annotated image saved at: %s", annotated_path)
+            #     detection_results["metadata"]["annotated_image_path"] = annotated_path
+            # return detection_results
 
     if model is None:
         model = config.get("LOADED_MODELS", {}).get("studs")
@@ -775,82 +927,89 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
             return None
     else:
         image = image_input
+        detection_results = None
+    
+    # print(f"[DEBUG] {detection_results.get('dimension', 'Not Found')}")
 
-    try:
-        orig_image = image.copy()
-        annotated_image = image.copy()
-        results = model.predict(source=image, conf=conf)
-        if isinstance(image_input, str):
-            results[0].path = image_input
-        boxes_np = (results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([]))
-        if boxes_np.size == 0:
-            logger.warning("⚠️ No detections found.")
-            boxes_np = np.array([[10, 10, 100, 100]])
+    cached_scan_flag = False if detection_results and detection_results.get("status") == "success" else True
 
-        annotated_image = results[0].plot(labels=False)
+    if cached_scan_flag:
+        try:
+            orig_image = image.copy()
+            annotated_image = image.copy()
+            results = model.predict(source=image, conf=conf)
+            if isinstance(image_input, str):
+                results[0].path = image_input
+            boxes_np = (results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([]))
+            if boxes_np.size == 0:
+                logger.warning("⚠️ No detections found.")
+                return 
+
+            annotated_image = results[0].plot(labels=False)
+
+            # Classify dimensions based on detected studs
+            dimension_info = classify_dimensions(results, orig_image)
+            dimension_result = dimension_info.get("dimension", "ERROR CATASTROFICO")
+            print(f"[DEBUG] {dimension_result}")
+            annotated_image = dimension_info.get("annotated_image", annotated_image)
+            metadata = extract_metadata_from_yolo_result(results, orig_image)
+            
+
+    
+        except Exception as e:
+            logger.error("❌ Error during studs detection: %s", e)
+            return None
+    else:  
+
+        dimension_result = detection_results.get("metadata", {}).get("dimension", "Not Found")
+        annotated_image = detection_results.get("annotated_image", image)
+        orig_image = detection_results.get("orig_image", image)
+        metadata = detection_results.get("metadata", {})
+
+
+    # Process dimension classification results and save annotated image if requested
+    if isinstance(dimension_result, dict):
+        # Extract dimension and use the provided annotated image with regression line
+        metadata["dimension"] = dimension_result.get("dimension", "Error")
+        annotated_image = dimension_result.get("annotated_image", annotated_image)
+    elif isinstance(dimension_result, str):
+        # String result means either a direct dimension or error message
+        metadata["dimension"] = dimension_result
+
+    if not output_folder:
+        output_folder = os.path.join(os.getcwd(), "results", "studs")
+        os.makedirs(output_folder, exist_ok=True)   
+
+    if isinstance(image_input, str) and cached_scan_flag:
+        write_exif(image_input, metadata)
+    elif save_annotated and metadata.get("annotated_image_path"):
+        write_exif(metadata["annotated_image_path"], metadata)
+        
+
+    
+    # Save annotated image if requested
+    if save_annotated:
+        # Create and save the annotated image
+        annotated_path = os.path.join(output_folder, "annotated_image.jpg")
+        cv2.imwrite(annotated_path, annotated_image)
+        metadata["annotated_image_path"] = annotated_path
+        logger.info("💾 Annotated image saved at: %s", annotated_path)
+    
+
+    return {
+        "orig_image": orig_image,
+        "annotated_image": annotated_image,
+        "dimension": metadata.get("dimension", "Error"),
+        # "cropped_detections": cropped_detections,
+        "metadata": metadata
+    }
+    
+    
+    
+
+    
+    
  
-        
-        
-        # cropped_detections = []
-        # for idx, box in enumerate(boxes_np):
-        #     x1, y1, x2, y2 = map(int, box[:4])
-        #     crop = orig_image[y1:y2, x1:x2]
-        #     cropped_detections.append(crop)
-        #     # cv2.rectangle(orig_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        #     # cv2.putText(orig_image, f"Brick {idx}", (x1, y1-10),
-        #     #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        metadata = extract_metadata_from_yolo_result(results, orig_image)
-
-        if not output_folder:
-            output_folder = os.path.join(os.getcwd(), "results", "studs")
-        os.makedirs(output_folder, exist_ok=True)
-        
-        
-        # if save_json:
-        #     json_path = os.path.join(output_folder, "metadata.json")
-        #     with open(json_path, "w") as json_file:
-        #         json.dump(metadata, json_file, indent=4)
-        #     metadata["json_results_path"] = json_path
-        #     logger.info("💾 Metadata JSON saved at: %s", json_path)
-
-        if isinstance(image_input, str):
-            write_exif(image_input, metadata)
-        elif save_annotated and metadata.get("annotated_image_path"):
-            write_exif(metadata["annotated_image_path"], metadata)
-        
-        # Classify dimensions based on detected studs
-        dimension_result = classify_dimensions(results, orig_image)
-
-
-        # Process dimension classification results and save annotated image if requested
-        if isinstance(dimension_result, dict):
-            # Extract dimension and use the provided annotated image with regression line
-            metadata["dimension"] = dimension_result.get("dimension", "Error")
-            annotated_image = dimension_result.get("annotated_image", annotated_image)
-        elif isinstance(dimension_result, str):
-            # String result means either a direct dimension or error message
-            metadata["dimension"] = dimension_result
-        
-        # Save annotated image if requested
-        if save_annotated:
-            # Create and save the annotated image
-            annotated_path = os.path.join(output_folder, "annotated_image.jpg")
-            cv2.imwrite(annotated_path, annotated_image)
-            metadata["annotated_image_path"] = annotated_path
-            logger.info("💾 Annotated image saved at: %s", annotated_path)
-        
-
-        return {
-            "orig_image": orig_image,
-            "annotated_image": annotated_image,
-            "dimension": metadata.get("dimension", "Error"),
-            # "cropped_detections": cropped_detections,
-            "metadata": metadata
-        }
-    except Exception as e:
-        logger.error("❌ Error during studs detection: %s", e)
-        return None
-
 
 # =============================================================================
 # Metadata Rendering Functions
