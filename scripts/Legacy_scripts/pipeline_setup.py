@@ -9,162 +9,20 @@ import yaml
 import sys
 
 # === Configuración Inicial ===
-def detect_environment():
+def detect_hardware():
     """
-    Detects the execution environment (Docker, Kaggle, Google Colab, or Local).
+    Detects the harware acereation avalaible for the current environment.
 
     Returns:
-    - str: The detected environment name.
+    0, 0,1 or cpu
     """
-    try:
-        if os.path.exists("/.dockerenv"):  # Check for Docker
-            return "docker"
+    
 
-        with open("/proc/self/cgroup", "r", encoding="utf-8", errors="ignore") as f:
-            if any("docker" in line for line in f):
-                return "docker"
-    except FileNotFoundError:
-        pass  # If the file doesn't exist, we are not in Docker
-
-    if "google.colab" in sys.modules:  # Google Colab
-        return "colab"
-
-    if os.path.exists("/kaggle"):  # Kaggle
-        return "kaggle"
-
-    # Default to "local" (including Windows)
-    return "local"
-
-def setup_environment(dataset_name, base_path="/workspace/output"):
+def Load_dataset(dataset_name, base_path="/workspace/output"):
     """
-    Configura el entorno según el sistema detectado y prepara el dataset.
-
-    Parameters:
-    - dataset_name (str): Nombre del dataset a descargar desde Kaggle.
-    - base_path (str): Carpeta base donde se configurará la salida.
-
-    Returns:
-    - dict: Rutas configuradas para las imágenes y etiquetas crudas.
+    download and unzip the slected dataset
     """
-    environment = detect_environment()
-    print(f"\n[INFO] Entorno detectado: {environment.capitalize()}\n")
-
-    dataset_mapping = {
-        "studs": "labeledstuds-lego-bricks",
-        "bricks": "spiled-lego-bricks"
-    }
-
-    if dataset_name not in dataset_mapping:
-        raise ValueError(f"[ERROR] Dataset '{dataset_name}' no reconocido. Usa 'studs' o 'bricks'.")
-
-    kaggle_dataset = dataset_mapping[dataset_name]
-
-    if environment == "docker":
-        dataset_path = "/workspace/datasets"
-        os.makedirs(dataset_path, exist_ok=True)
-
-        required_folders = ["images", "YOLO_ready_txt_labels"]
-        for folder in required_folders:
-            full_path = os.path.join(dataset_path, folder)
-            if not os.path.exists(full_path):
-                raise FileNotFoundError(f"[ERROR] Carpeta requerida no encontrada: {full_path}")
-            print(f"[INFO] Carpeta verificada: {full_path}")
-
-        return {
-            "raw_images_path": os.path.join(dataset_path, "images"),
-            "raw_labels_path": os.path.join(dataset_path, "YOLO_ready_txt_labels"),
-            "output_path": base_path
-        }
-
-    elif environment == "kaggle":
-        dataset_path = f"/kaggle/input/{kaggle_dataset}"
-        required_folders = ["images", "YOLO_ready_txt_labels"]
-
-        for folder in required_folders:
-            full_path = os.path.join(dataset_path, folder)
-            if not os.path.exists(full_path):
-                raise FileNotFoundError(f"[ERROR] Carpeta requerida no encontrada: {full_path}")
-            print(f"[INFO] Carpeta verificada: {full_path}")
-
-        return {
-            "raw_images_path": os.path.join(dataset_path, "images"),
-            "raw_labels_path": os.path.join(dataset_path, "YOLO_ready_txt_labels"),
-            "output_path": base_path
-        }
-
-    elif environment == "colab":
-        from google.colab import userdata
-        kaggle_path = "kaggle.json"
-        if not os.path.exists(kaggle_path):
-            os.makedirs("/root/.kaggle", exist_ok=True)
-
-            kaggle_user = userdata.get('KaggleUser')
-            kaggle_token = userdata.get('KaggleToken')
-            if not kaggle_user or not kaggle_token:
-                raise EnvironmentError("[ERROR] No se encontraron las credenciales de Kaggle en Google Colab.")
-
-            kaggle_data = {"username": kaggle_user, "key": kaggle_token}
-            with open("/root/.kaggle/kaggle.json", "w") as f:
-                json.dump(kaggle_data, f)
-                print("[INFO] Credenciales de Kaggle configuradas en Google Colab.")
-        else:
-            os.makedirs("/root/.kaggle", exist_ok=True)
-            shutil.move(kaggle_path, "/root/.kaggle/kaggle.json")
-            print("[INFO] Archivo kaggle.json movido a /root/.kaggle/")
-        os.chmod("/root/.kaggle/kaggle.json", 0o600)
-        os.makedirs("working", exist_ok=True)
-        os.makedirs(f"working/{dataset_mapping[dataset_name]}", exist_ok=True)
-        os.system(f"kaggle datasets download -d migueldilalla/{dataset_mapping[dataset_name]} -p working/{dataset_mapping[dataset_name]} --unzip")
-        os.makedirs("working/output", exist_ok=True)
-        dataset_path = f"working/{dataset_mapping[dataset_name]}"
-
-        return {
-            "raw_images_path": os.path.join(dataset_path, "images"),
-            "raw_labels_path": os.path.join(dataset_path, "YOLO_ready_txt_labels"),
-            "output_path": os.path.join(os.getcwd(), "working", "output")
-        }
-
-    elif environment == "local":
-        kaggle_json_path = os.path.expanduser("~/.kaggle/kaggle.json")
-        if not os.path.exists(kaggle_json_path):
-            raise EnvironmentError("[ERROR] Archivo kaggle.json no encontrado en ~/.kaggle/")
-        os.makedirs("working", exist_ok=True)
-        os.makedirs(f"working/{dataset_mapping[dataset_name]}", exist_ok=True)
-        if not os.listdir(f"working/{dataset_mapping[dataset_name]}"):
-            os.system(f"kaggle datasets download -d migueldilalla/{dataset_mapping[dataset_name]} -p working/{dataset_mapping[dataset_name]} --unzip")
-        os.makedirs("working/output", exist_ok=True)
-        dataset_path = f"working/{dataset_mapping[dataset_name]}"
-
-        return {
-            "raw_images_path": os.path.join(dataset_path, "images"),
-            "raw_labels_path": os.path.join(dataset_path, "YOLO_ready_txt_labels"),
-            "output_path": os.path.join(os.getcwd(), "working", "output")
-        }
-
-    else:
-        raise EnvironmentError("[ERROR] No se pudo detectar el entorno correctamente.")
-
-
-def setup_environment_custom(choice, base_path):
-    """
-    Configura el entorno manualmente basado en la elección del usuario.
-
-    Parameters:
-    - choice (str): 'k' para Kaggle, 'g' para Colab, 'l' para Local.
-    - base_path (str): Ruta base para la salida.
-
-    Returns:
-    - dict: Rutas configuradas para las imágenes y etiquetas crudas.
-    """
-    if choice == "k":
-        return setup_environment()
-    elif choice == "g":
-        return setup_environment(base_path="working")
-    elif choice == "l":
-        return setup_environment(base_path="working")
-    else:
-        raise EnvironmentError("[ERROR] Configuración desconocida.")
-
+   
 def verify_dataset_structure(raw_images_path, raw_labels_path):
     """
     Verifica la existencia de las carpetas requeridas en el dataset y muestra estadísticas iniciales.
@@ -288,38 +146,6 @@ def augment_data(input_images, input_labels, output_dir, num_augmentations=2):
 
     print(f"[INFO] Augmented data saved to {output_dir}.")
 
-def load_labels(label_path):
-    """
-    Carga etiquetas en formato YOLO desde un archivo .txt.
-
-    Parameters:
-    - label_path (str): Ruta al archivo de etiquetas en formato YOLO.
-
-    Returns:
-    - bboxes (list): Lista de bounding boxes en formato YOLO.
-    - class_labels (list): Lista de etiquetas de clase.
-    """
-    bboxes, class_labels = [], []
-    with open(label_path, "r") as f:
-        lines = f.readlines()
-    for line in lines:
-        class_id, x_center, y_center, width, height = map(float, line.strip().split())
-        bboxes.append([x_center, y_center, width, height])
-        class_labels.append(int(class_id))
-    return bboxes, class_labels
-
-def save_labels(output_path, bboxes, class_labels):
-    """
-    Guarda etiquetas en formato YOLO en un archivo .txt.
-
-    Parameters:
-    - output_path (str): Ruta donde se guardará el archivo de etiquetas.
-    - bboxes (list): Lista de bounding boxes en formato YOLO.
-    - class_labels (list): Lista de etiquetas de clase.
-    """
-    with open(output_path, "w") as f:
-        for bbox, label in zip(bboxes, class_labels):
-            f.write(f"{label} {' '.join(map(str, bbox))}\n")
 
 
 def copy_augmented_to_train(augmented_dir, output_path):

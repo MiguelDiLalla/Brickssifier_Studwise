@@ -1,4 +1,4 @@
-# LEGO Bricks ML Vision
+# LEGO Bricks ML Vision 🧱👁️
 
 A machine learning project for detecting and classifying LEGO bricks through computer vision.
 
@@ -6,9 +6,9 @@ A machine learning project for detecting and classifying LEGO bricks through com
 
 This project demonstrates a complete machine learning workflow for LEGO brick detection and classification:
 
-1. **Brick Detection**: Identifying LEGO bricks in images using YOLOv8
-2. **Stud Detection**: Locating individual studs on detected bricks
-3. **Dimension Classification**: Determining brick dimensions (e.g., 2x4) based on stud patterns
+1. **Brick Detection** 🔍: Identifying LEGO bricks in images using YOLOv8
+2. **Stud Detection** 📍: Locating individual studs on detected bricks
+3. **Dimension Classification** 📏: Determining brick dimensions (e.g., 2x4) based on stud patterns
 
 ## Key Features
 

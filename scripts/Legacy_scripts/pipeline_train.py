@@ -164,38 +164,10 @@ def train_model(dataset_yaml=None, pretrained_model="yolov8n.pt", epochs=EPOCAS,
         logging.error(f"[ERROR] Error durante el entrenamiento: {e}")
 
 
-# === Integración de Optuna en el Pipeline ===
-def run_optuna_study(dataset_yaml=None, n_trials=20):
-    """
-    Ejecuta un estudio de Optuna para optimizar los hiperparámetros de YOLO.
-
-    Parameters:
-    - dataset_yaml (str): Ruta al archivo dataset.yaml.
-    - n_trials (int): Número de pruebas a ejecutar.
-    """
-    dataset_yaml = dataset_yaml or os.path.join(os.getcwd(), "working", "output", "dataset", "dataset.yaml")
-
-    if not os.path.exists(dataset_yaml):
-        logging.error(f"[ERROR] dataset.yaml no encontrado en {dataset_yaml}. Asegúrate de que el pipeline_setup.py lo haya generado.")
-        return
-
-    logging.info(f"[INFO] Usando dataset.yaml en: {dataset_yaml}")
-
-    logging.info("[INFO] Iniciando optimización con Optuna...")
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials)
-
-    # Mostrar resultados
-    logging.info(f"[INFO] Mejor conjunto de hiperparámetros: {study.best_params}")
-    logging.info(f"[INFO] Mejor mAP50 obtenido: {study.best_value}")
-
-    # Guardar resultados
-    study.trials_dataframe().to_csv("optuna_results.csv")
-    optuna.visualization.plot_optimization_history(study).write_html("optuna_optimization_history.html")
 
 
 # === Función Principal ===
-def main(optuna_mode=False):
+def main():
     """
     Ejecuta el entrenamiento con o sin Optuna.
 
@@ -216,11 +188,8 @@ def main(optuna_mode=False):
         print(dataset_yaml)
 
 
-    if optuna_mode:
-        run_optuna_study(dataset_yaml, n_trials=20)
-    else:
-        dataset_yaml = os.path.join(os.getcwd(), "working", "output", "dataset", "dataset.yaml")
-        train_model(dataset_yaml, imgsz=640)
+    dataset_yaml = os.path.join(os.getcwd(), "working", "output", "dataset", "dataset.yaml")
+    train_model(dataset_yaml, imgsz=640)
 
 if __name__ == "__main__":
-    main(optuna_mode=False)
+    main()

@@ -1,35 +1,53 @@
 """
 Model Utilities for LEGO Bricks ML Vision
 
-Includes:
-  - Model loading and inference functions with YOLO
-  - EXIF metadata reading/writing (with scan count)
-  - Image annotation and metadata panel rendering
+This module provides core machine learning utilities for the LEGO Bricks ML Vision project.
+It contains functions for model loading, inference, metadata handling, and result visualization.
 
-All log messages include emoji markers for clear readability.
+Key features:
+  - YOLO model loading and inference for brick and stud detection
+  - EXIF metadata reading/writing with scan count tracking
+  - Image annotation and visualization capabilities
+  - Dimension classification based on stud detection
+  - Rich logging with emoji markers for readability
+
+Usage examples:
+  - detect_bricks() - Detect LEGO bricks in images
+  - detect_studs() - Detect studs on LEGO bricks
+  - run_full_algorithm() - Run the complete detection pipeline
+
+Author: Miguel DiLalla
 """
 
 import json
-from PIL import Image, ExifTags
-import numpy as np
 import logging
 import datetime
 import platform
 import os
 import base64
+import sys
 import requests
-from ultralytics import YOLO
-import piexif
-import cv2
-from PIL import Image, ImageDraw, ImageFont
-import rich
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from pathlib import Path
+from typing import Dict, List, Union, Optional, Tuple, Any
 
-# Initialize rich console
-console = Console()
+import numpy as np
+import torch
+import cv2
+import piexif
+from PIL import Image, ImageDraw, ImageFont, ExifTags
+from ultralytics import YOLO
+
+# Try importing rich for enhanced console output
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+    RICH_AVAILABLE = True
+    console = Console()
+except ImportError:
+    RICH_AVAILABLE = False
+    print("Warning: 'rich' package not available. Install with: pip install rich")
 
 # Set up professional logging with emoji markers
 logging.basicConfig(
@@ -41,7 +59,13 @@ logger.info("🚀 Model Utils module loaded.")
 
 def setup_utils(repo_download=False):
     """
-    Initializes and returns a configuration dictionary with all global variables and defaults.
+    Initialize and return a configuration dictionary with all global variables and defaults.
+    
+    Args:
+        repo_download (bool): Whether to download missing assets from repository.
+        
+    Returns:
+        dict: Configuration dictionary with paths, models, and settings.
     """
     CONFIG_DICT = {}  # New configuration dictionary
     
@@ -64,7 +88,7 @@ def setup_utils(repo_download=False):
     logger.info("📂 Current working directory: %s", os.getcwd())
 
     def get_image_files(folder):
-        # ...existing code...
+        """Get all image files from a folder with supported extensions."""
         full_path = os.path.join(os.getcwd(), folder)
         image_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.gif')
         if not os.path.exists(full_path):
@@ -80,9 +104,9 @@ def setup_utils(repo_download=False):
             logger.info("✅ Found %d images in %s", len(files), folder)
         else:
             CONFIG_DICT["TEST_IMAGES"][key] = []
-            logger.info("⚠️ Folder %s does not exist; no images found.", folder)
+            logger.warning("⚠️ Folder %s does not exist; no images found.", folder)
     
-    # Load models from disk
+    # Load models from disk or download them if needed
     CONFIG_DICT["LOADED_MODELS"] = {}
     for model_name, relative_path in CONFIG_DICT["MODELS_PATHS"].items():
         local_path = os.path.join(os.getcwd(), relative_path)
@@ -420,7 +444,6 @@ def extract_metadata_from_yolo_result(results, orig_image):
 #                 current_line = candidate_line
 #             else:
 #                 # It doesn't fit, so push current_line to wrapped_lines
-#                 wrapped_lines.append(current_line)
 #                 # Start a new line with the current word
 #                 current_line = word
 
@@ -723,6 +746,17 @@ def clean_exif_metadata(image_path):
 def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder=""):
     """
     Performs brick detection using the provided YOLO model with rich progress display.
+    
+    Args:
+        image_input: Either image path (str) or numpy array (np.ndarray)
+        model: YOLO model instance (uses default from config if None)
+        conf: Confidence threshold for detections
+        save_json: If True, saves detection metadata as JSON
+        save_annotated: If True, saves annotated image
+        output_folder: Directory to save outputs to
+        
+    Returns:
+        dict: Dictionary containing detection results
     """
     # Define results at the beginning to ensure it exists
     results = None
@@ -746,6 +780,8 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
             
         if not output_folder:
             console.print("[yellow]⚠️ No output folder provided. Results will not be saved.[/]")
+        else:
+            os.makedirs(output_folder, exist_ok=True)
         
         status.update("[bold green]Running detection...")
     
@@ -772,6 +808,23 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
             crop = image[y1:y2, x1:x2]
             cropped_detections.append(crop)
         
+        # Save outputs if requested and output_folder is provided
+        if output_folder:
+            if save_annotated:
+                # Save the annotated image
+                composite_path = os.path.join(output_folder, "composite_image.jpg")
+                cv2.imwrite(composite_path, annotated_image)
+                metadata["annotated_image_path"] = composite_path
+                logger.info(f"💾 Saved annotated image to: {composite_path}")
+                
+            if save_json:
+                # Save metadata as JSON
+                json_path = os.path.join(output_folder, "metadata.json")
+                with open(json_path, 'w') as f:
+                    json.dump(metadata, f, indent=4)
+                metadata["json_results_path"] = json_path
+                logger.info(f"💾 Saved metadata to: {json_path}")
+                
         progress.update(detection_task, completed=100)
     
     # Check results safely after it's been defined
@@ -987,12 +1040,20 @@ def run_full_algorithm(image_path, save_annotated=False, output_folder="", force
     """
     Runs the full algorithm for brick detection and dimension classification.
     Accepts an image file path and returns the final results dictionary.
+    
+    Args:
+        image_path (str): Path to the image file to process
+        save_annotated (bool): Whether to save annotated images to disk
+        output_folder (str): Path to save results (created if not exists)
+        force_ran (bool): Force re-running detection even if cached results exist
+        logo (np.ndarray): Logo image to add to the bottom of the composite image
+        
+    Returns:
+        dict: Dictionary containing brick_results, studs_results, and composite_image
     """
     # handle empty output folder
     if output_folder == "" and save_annotated:
-        # in the CWD inside test/test_results/
-
-        output_folder = os.path.join(os.getcwd(), "test", "test_results")
+        output_folder = os.path.join(os.getcwd(), "tests", "test_results")
         os.makedirs(output_folder, exist_ok=True)
         logger.info("📂 Output folder not provided. Saving results in: %s", output_folder)
 
@@ -1008,131 +1069,125 @@ def run_full_algorithm(image_path, save_annotated=False, output_folder="", force
         logger.error("❌ Error during brick detection.")
         return None
 
-    # If cropped_detections is greater than 1, run studs detection on each cropped detection
-    # Store the results in a list
-  
-    
+    # Get cropped detections from brick detection
     cropped_detections = brick_results.get("cropped_detections", [])
-    #log number of cropped detections
     logger.info(f"🔍 Found {len(cropped_detections)} cropped detections.")
     studs_results = []
+    
+    # Process each detected brick
     if len(cropped_detections) > 1:
         for idx, crop in enumerate(cropped_detections):
             logger.info(f"🔍 Running studs detection on cropped detection number {idx + 1}.")
             studs_result = detect_studs(crop, save_annotated=False)
             if studs_result is None:
-                logger.error("❌ No studs detected in cropped detection number %s.", idx + 1)
+                logger.error(f"❌ No studs detected in cropped detection number {idx + 1}.")
                 continue
             studs_results.append(studs_result)
             
     elif len(cropped_detections) == 1:
-        logger.info(f"🔍 Running studs detection on cropped detection.")
+        logger.info(f"🔍 Running studs detection on single cropped detection.")
         studs_result = detect_studs(cropped_detections[0], save_annotated=False)
         if studs_result is None:
-            logger.error("❌ Nothing detected at all!.")
+            logger.error("❌ No studs detected in the single cropped detection.")
             return None
         studs_results = [studs_result]
     else:
-        logger.warning("⚠️ No brick detected. running studs detection on the original image.")
+        logger.warning("⚠️ No brick detected. Running studs detection on the original image.")
         studs_result = detect_studs(image_path, save_annotated=False)
         if studs_result is None:
-            logger.error("❌ Nothing detected at all!")
+            logger.error("❌ No studs detected in the original image.")
             return None
         studs_results = [studs_result]
 
-    #log the len of the studs results
-    logger.info(f"🔍 Found {len(studs_results)} valid studs results. Classifiying dimension...")
-
+    logger.info(f"🔍 Found {len(studs_results)} valid studs results. Classifying dimensions...")
+    
+    # Create the composite image
+    base_image = brick_results.get("annotated_image")
+    
     if len(studs_results) > 1:
-        base_image = brick_results.get("annotated_image")
-
-        # list all the annotated images from the studs detection
+        # For multiple studs results, create a horizontal stack of all annotated studs images
         annotated_studs_images = [result.get("annotated_image") for result in studs_results]
-        # calculate the area of each cropped & annotated image
         areas = [image.shape[0] * image.shape[1] for image in annotated_studs_images]
-        # sort them by area descending
         sorted_images = [image for _, image in sorted(zip(areas, annotated_studs_images), reverse=True)]
-        # preserving the aspect ratio, resize all the images to the same height as the first one
+        
+        # Resize all images to the same height
         height = sorted_images[0].shape[0]
-        resized_images = [cv2.resize(image, (int(image.shape[1] * height / image.shape[0]), height)) for image in sorted_images]
-        # stack them horizontally
+        resized_images = [cv2.resize(image, (int(image.shape[1] * height / image.shape[0]), height)) 
+                         for image in sorted_images]
+        
+        # Stack images horizontally
         studs_image = np.hstack(resized_images)
-        # Resize the studs image to match the base image width while preserving aspect ratio
-        width_ratio = base_image.shape[1] / studs_image.shape[1]  # scaling factor
+        
+        # Resize studs image to match base image width
+        width_ratio = base_image.shape[1] / studs_image.shape[1]
         new_width = base_image.shape[1]
         new_height = int(studs_image.shape[0] * width_ratio)
         studs_image = cv2.resize(studs_image, (new_width, new_height))
-        # stack them vertically, base image on top
-        composite_image = np.vstack((base_image, studs_image))
-
-        # Stack the logo at the bottom of the composite image using Photoshop "screen" blend mode
-        if logo is not None:
-            # Resize logo to match the width of the composite image
-            logo_height, logo_width = logo.shape[:2]
-            composite_width = composite_image.shape[1]
-            aspect_ratio = logo_width / logo_height
-            new_logo_height = int(composite_width / aspect_ratio)
-            resized_logo = cv2.resize(logo, (composite_width, new_logo_height))
-            
-            # Convert both images to float for blending calculation
-            logo_float = resized_logo.astype(float)
-            
-            # Create a red background of the same dimensions as the logo
-            background = np.zeros_like(logo_float)
-            # Set red channel (2 in BGR format) to full intensity
-            background[:,:,2] = 255.0
-            
-            # Apply the screen blend formula: result = 255 - ((255 - background) * (255 - foreground) / 255)
-            blended_logo = 255 - ((255 - background) * (255 - logo_float) / 255)
-            blended_logo = blended_logo.astype(np.uint8)
-            
-            # Stack the blended logo below the composite image
-            composite_image = np.vstack((composite_image, blended_logo))
-        else:
-            logger.warning("⚠️ No logo available for the composite image.")
-
         
-        # add a red margin to the composite image
-        composite_image = cv2.copyMakeBorder(composite_image, 10, 10, 10, 10,
-                                             cv2.BORDER_CONSTANT, value=(0, 0, 255))
-   
+        # Stack base image and studs image vertically
+        composite_image = np.vstack((base_image, studs_image))
     else:
-        studs_image = studs_results.get("annotated_image")
-        # resize the studs image to the same width as the base image
-
-         # Stack the logo at the bottom of the composite image using Photoshop "screen" blend mode
-        if logo is not None:
-            # Resize logo to match the width of the composite image
-            logo_height, logo_width = logo.shape[:2]
-            composite_width = composite_image.shape[1]
-            aspect_ratio = logo_width / logo_height
-            new_logo_height = int(composite_width / aspect_ratio)
-            resized_logo = cv2.resize(logo, (composite_width, new_logo_height))
+        # For a single studs result
+        if studs_results and len(studs_results) > 0:
+            studs_image = studs_results[0].get("annotated_image")
             
-            # Convert both images to float for blending calculation
-            logo_float = resized_logo.astype(float)
+            # Resize studs image to match base image width
+            h, w = studs_image.shape[:2]
+            new_w = base_image.shape[1]
+            new_h = int(h * new_w / w)
+            resized_studs_image = cv2.resize(studs_image, (new_w, new_h))
             
-            # Create a black background of the same dimensions as the logo
-            background = np.zeros_like(logo_float)
-            
-            # Apply the screen blend formula: result = 255 - ((255 - background) * (255 - foreground) / 255)
-            blended_logo = 255 - ((255 - background) * (255 - logo_float) / 255)
-            blended_logo = blended_logo.astype(np.uint8)
-            
-            # Stack the blended logo below the composite image
-            composite_image = np.vstack((composite_image, blended_logo))
+            # Stack base image and studs image vertically
+            composite_image = np.vstack((base_image, resized_studs_image))
         else:
-            logger.warning("⚠️ No logo available for the composite image.")
-
-
-        # add a red margin to the composite image
-        composite_image = cv2.copyMakeBorder(composite_image, 10, 10, 10, 10,
-                                             cv2.BORDER_CONSTANT, value=(0, 0, 255))
+            logger.warning("⚠️ No valid studs results to create composite image.")
+            composite_image = base_image.copy()
     
+    # Add logo to the bottom if provided
+    if logo is not None:
+        # Resize logo to match the width of the composite image
+        logo_height, logo_width = logo.shape[:2]
+        composite_width = composite_image.shape[1]
+        aspect_ratio = logo_width / logo_height
+        new_logo_height = int(composite_width / aspect_ratio)
+        resized_logo = cv2.resize(logo, (composite_width, new_logo_height))
+        
+        # Convert to float for blending calculation
+        logo_float = resized_logo.astype(float)
+        
+        # Create a red background
+        background = np.zeros_like(logo_float)
+        background[:,:,2] = 255.0  # Red in BGR
+        
+        # Screen blend formula
+        blended_logo = 255 - ((255 - background) * (255 - logo_float) / 255)
+        blended_logo = blended_logo.astype(np.uint8)
+        
+        # Stack the blended logo below the composite image
+        composite_image = np.vstack((composite_image, blended_logo))
+    else:
+        logger.warning("⚠️ No logo available for the composite image.")
+
+    # Add a red margin to the composite image
+    composite_image = cv2.copyMakeBorder(composite_image, 10, 10, 10, 10,
+                                         cv2.BORDER_CONSTANT, value=(0, 0, 255))
+    
+    # Save annotated image if requested
     if save_annotated:
         annotated_path = os.path.join(output_folder, "fullyScannedImage.jpg")
         cv2.imwrite(annotated_path, composite_image)
         logger.info("💾 Annotated image saved at: %s", annotated_path)
+        
+        # Optional: Save metadata if needed
+        # combined_metadata = {
+        #    "brick_detection": brick_results.get("metadata", {}),
+        #    "stud_detection": [result.get("metadata", {}) for result in studs_results],
+        #    "timestamp": datetime.datetime.now().isoformat()
+        # }
+        # json_path = os.path.join(output_folder, "full_algorithm_results.json")
+        # with open(json_path, "w") as f:
+        #    json.dump(combined_metadata, f, indent=2)
+        # logger.info("💾 Results metadata saved at: %s", json_path)
 
     return {
         "brick_results": brick_results,
