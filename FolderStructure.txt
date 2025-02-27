@@ -1,48 +1,48 @@
 - LEGO_Bricks_ML_Vision
-  .gitignore (modified 8735.6 minutes ago)
-  FolderStructure.txt (modified 89.8 minutes ago)
-  GenerateStructure.ps1 (modified 38867.9 minutes ago)
-  lego_cli.py (modified 89.8 minutes ago)
-  LICENSE (modified 56029.6 minutes ago)
-  LogoComposition.psd (modified 17318.8 minutes ago)
-  model_utils_draft.jpg (modified 9996.9 minutes ago)
-  Project_Logo.png (modified 17393.9 minutes ago)
-  pytest.ini (modified 72.7 minutes ago)
-  README.md (modified 80.2 minutes ago)
-  render_metadate_func_draft.jpg (modified 8907.1 minutes ago)
-  requirements.txt (modified 21386.8 minutes ago)
-  train.py (modified 138.1 minutes ago)
+  .gitignore (modified 8765.5 minutes ago)
+  FolderStructure.txt (modified 29.8 minutes ago)
+  GenerateStructure.ps1 (modified 38897.7 minutes ago)
+  lego_cli.py (modified 119.6 minutes ago)
+  LICENSE (modified 56059.5 minutes ago)
+  LogoComposition.psd (modified 17348.6 minutes ago)
+  model_utils_draft.jpg (modified 10026.7 minutes ago)
+  Project_Logo.png (modified 17423.7 minutes ago)
+  pytest.ini (modified 102.5 minutes ago)
+  README.md (modified 110 minutes ago)
+  render_metadate_func_draft.jpg (modified 8937 minutes ago)
+  requirements.txt (modified 1.5 minutes ago)
+  train.py (modified 167.9 minutes ago)
   - __pycache__
-    lego_cli.cpython-310.pyc (modified 112.1 minutes ago)
-    test_export_logs.cpython-310.pyc (modified 10224 minutes ago)
-    test_export_logs.cpython-311.pyc (modified 10241.9 minutes ago)
-    train.cpython-310.pyc (modified 112.1 minutes ago)
-    train.cpython-311.pyc (modified 10241.9 minutes ago)
+    lego_cli.cpython-310.pyc (modified 141.9 minutes ago)
+    test_export_logs.cpython-310.pyc (modified 10253.8 minutes ago)
+    test_export_logs.cpython-311.pyc (modified 10271.7 minutes ago)
+    train.cpython-310.pyc (modified 141.9 minutes ago)
+    train.cpython-311.pyc (modified 10271.7 minutes ago)
   - .github
     - copilot
-      responses.yml (modified 168.7 minutes ago)
+      responses.yml (modified 198.5 minutes ago)
   - .pytest_cache
-    .gitignore (modified 111.8 minutes ago)
-    CACHEDIR.TAG (modified 111.8 minutes ago)
-    README.md (modified 111.8 minutes ago)
+    .gitignore (modified 141.7 minutes ago)
+    CACHEDIR.TAG (modified 141.7 minutes ago)
+    README.md (modified 141.7 minutes ago)
     - v
       - cache
-        lastfailed (modified 11 minutes ago)
-        nodeids (modified 11 minutes ago)
-        stepwise (modified 11 minutes ago)
+        lastfailed (modified 40.9 minutes ago)
+        nodeids (modified 40.9 minutes ago)
+        stepwise (modified 40.9 minutes ago)
   - cache
     - datasets
     - models
   - configs
-    dataset.yaml (modified 26074.4 minutes ago)
-    training.json (modified 26074.4 minutes ago)
+    dataset.yaml (modified 26104.2 minutes ago)
+    training.json (modified 26104.2 minutes ago)
   - data
     - annotations
       - export test
         More than 20 files, summary:
-          .jpg: 80 files
-          .png: 1 files
           .json: 1 files
+          .png: 1 files
+          .jpg: 80 files
       - LabelMe_json_files_bricks
         More than 20 files, summary:
           .json: 1803 files
@@ -70,7 +70,7 @@
         More than 20 files, summary:
           .txt: 1803 files
     - processed
-      .gitkeep (modified 25858.2 minutes ago)
+      .gitkeep (modified 25888 minutes ago)
       - Cropped_bricks
         More than 20 files, summary:
           .jpg: 2176 files
@@ -79,209 +79,209 @@
           .txt: 2176 files
     - raw
       More than 20 files, summary:
-        .jpg: 1803 files
         .png: 7 files
+        .jpg: 1803 files
   - docker
     - Train_github_version
-      CHANGELOG.md (modified 30330 minutes ago)
-      Dockerfile (modified 26245.3 minutes ago)
-      Dockerfile.txt (modified 26245.5 minutes ago)
-      requirements.txt (modified 30327.9 minutes ago)
-      Train_cli.py (modified 30336.4 minutes ago)
-      Train_models_docker.py (modified 28954.3 minutes ago)
+      CHANGELOG.md (modified 30359.8 minutes ago)
+      Dockerfile (modified 26275.1 minutes ago)
+      Dockerfile.txt (modified 26275.3 minutes ago)
+      requirements.txt (modified 30357.8 minutes ago)
+      Train_cli.py (modified 30366.2 minutes ago)
+      Train_models_docker.py (modified 28984.2 minutes ago)
     - Utils_github_version
-      Utils_LEGO_docker.py (modified 30222.2 minutes ago)
+      Utils_LEGO_docker.py (modified 30252 minutes ago)
   - docs
-    Technical_Guide.md (modified 0.8 minutes ago)
+    Technical_Guide.md (modified 6.5 minutes ago)
     - Legacy_docs
-      App_Initial_prompt.md (modified 26100.3 minutes ago)
-      LEGO_Bricks_Identification_Project_Overview.pdf (modified 56075 minutes ago)
-      LEGO_Bricks_Identification_Project_Technical_Report.pdf (modified 56075 minutes ago)
-      LEGO_Bricks_Project_Miguel_Di_Lalla.md (modified 57935.9 minutes ago)
-      Refurbishing_Project_doc_withCODE.pdf (modified 56075 minutes ago)
-      Refurbishing_Project_doc.pdf (modified 56075 minutes ago)
-      Rewind_latex_doc.pdf (modified 56075 minutes ago)
-      train_py_func_dependencies_map.png (modified 25979.5 minutes ago)
-      train_py_refactoring.md (modified 25994.9 minutes ago)
+      App_Initial_prompt.md (modified 26130.1 minutes ago)
+      LEGO_Bricks_Identification_Project_Overview.pdf (modified 56104.8 minutes ago)
+      LEGO_Bricks_Identification_Project_Technical_Report.pdf (modified 56104.8 minutes ago)
+      LEGO_Bricks_Project_Miguel_Di_Lalla.md (modified 57965.8 minutes ago)
+      Refurbishing_Project_doc_withCODE.pdf (modified 56104.8 minutes ago)
+      Refurbishing_Project_doc.pdf (modified 56104.8 minutes ago)
+      Rewind_latex_doc.pdf (modified 56104.8 minutes ago)
+      train_py_func_dependencies_map.png (modified 26009.3 minutes ago)
+      train_py_refactoring.md (modified 26024.7 minutes ago)
   - logs
-    .gitkeep (modified 25858.2 minutes ago)
+    .gitkeep (modified 25888 minutes ago)
   - models
     - checkpoints
-      Brick_Model_best20250123_192838t.pt (modified 50308.1 minutes ago)
-      Stud_Model_best20250124_170824.pt (modified 48991.1 minutes ago)
-      yolov8n.pt (modified 57935.9 minutes ago)
+      Brick_Model_best20250123_192838t.pt (modified 50337.9 minutes ago)
+      Stud_Model_best20250124_170824.pt (modified 49020.9 minutes ago)
+      yolov8n.pt (modified 57965.8 minutes ago)
       - Legacy_Models
-        Stud_Model_best20250124_165222.pt (modified 49023.7 minutes ago)
-        YOLO_LegoBrick_Detectron_v0.pt (modified 57933.3 minutes ago)
-        YOLOdetectron_LegoBrick_yolov8n_20241029_175720.pt (modified 57933.3 minutes ago)
-        YOLOdetectron_Stud_yolov8n_20241030_151507.pt (modified 57933.3 minutes ago)
+        Stud_Model_best20250124_165222.pt (modified 49053.5 minutes ago)
+        YOLO_LegoBrick_Detectron_v0.pt (modified 57963.1 minutes ago)
+        YOLOdetectron_LegoBrick_yolov8n_20241029_175720.pt (modified 57963.1 minutes ago)
+        YOLOdetectron_Stud_yolov8n_20241030_151507.pt (modified 57963.1 minutes ago)
     - final
   - notebooks
     - Legacy_notebooks
-      LEGO_Bricks_Identification_Project_Overview.ipynb (modified 56075 minutes ago)
-      LEGO_Bricks_Identification_Project_Technical_Report.ipynb (modified 55778.6 minutes ago)
-      LEGO_Bricks_Project_Miguel_Di_Lalla.ipynb (modified 57935.9 minutes ago)
-      LEGO_MachineVision_refactorTest.ipynb (modified 14523.5 minutes ago)
-      notebook_test_foldersTree.txt (modified 19895.2 minutes ago)
-      Technical_Report.ipynb (modified 55724.1 minutes ago)
-      Technical_Report.md (modified 55816.2 minutes ago)
-      TrainTest.ipynb (modified 52044 minutes ago)
-      tree_structure.txt (modified 50265.9 minutes ago)
-      Utilities_dev.ipynb (modified 9928.7 minutes ago)
+      LEGO_Bricks_Identification_Project_Overview.ipynb (modified 56104.8 minutes ago)
+      LEGO_Bricks_Identification_Project_Technical_Report.ipynb (modified 55808.4 minutes ago)
+      LEGO_Bricks_Project_Miguel_Di_Lalla.ipynb (modified 57965.8 minutes ago)
+      LEGO_MachineVision_refactorTest.ipynb (modified 14553.3 minutes ago)
+      notebook_test_foldersTree.txt (modified 19925 minutes ago)
+      Technical_Report.ipynb (modified 55753.9 minutes ago)
+      Technical_Report.md (modified 55846 minutes ago)
+      TrainTest.ipynb (modified 52073.8 minutes ago)
+      tree_structure.txt (modified 50295.7 minutes ago)
+      Utilities_dev.ipynb (modified 9958.5 minutes ago)
   - presentation
-    FolderStructure.txt (modified 17541.7 minutes ago)
-    GenerateStructure.ps1 (modified 38867.9 minutes ago)
-    logo.png (modified 17441.5 minutes ago)
+    FolderStructure.txt (modified 17571.5 minutes ago)
+    GenerateStructure.ps1 (modified 38897.7 minutes ago)
+    logo.png (modified 17471.3 minutes ago)
     - Datasets_Compress
-      BrickStuds_Dataset.zip (modified 31889.9 minutes ago)
-      LegoBricks_Dataset.zip (modified 31893.8 minutes ago)
+      BrickStuds_Dataset.zip (modified 31919.7 minutes ago)
+      LegoBricks_Dataset.zip (modified 31923.6 minutes ago)
     - Models_DEMO
-      Brick_Model_best20250123_192838t.pt (modified 50308.1 minutes ago)
-      Stud_Model_best20250124_170824.pt (modified 48991.1 minutes ago)
+      Brick_Model_best20250123_192838t.pt (modified 50337.9 minutes ago)
+      Stud_Model_best20250124_170824.pt (modified 49020.9 minutes ago)
     - Test_images
       - BricksPics
-        image_10.jpg (modified 1491.5 minutes ago)
-        image_14.jpg (modified 72 minutes ago)
-        image_277.jpg (modified 1491.5 minutes ago)
-        image_605.jpg (modified 1491.5 minutes ago)
-        image_668.jpg (modified 1491.5 minutes ago)
-        image_696.jpg (modified 1491.5 minutes ago)
-        image_699.jpg (modified 72 minutes ago)
-        image_701.jpg (modified 1491.5 minutes ago)
+        image_10.jpg (modified 1521.3 minutes ago)
+        image_14.jpg (modified 101.8 minutes ago)
+        image_277.jpg (modified 1521.3 minutes ago)
+        image_605.jpg (modified 1521.3 minutes ago)
+        image_668.jpg (modified 1521.3 minutes ago)
+        image_696.jpg (modified 1521.3 minutes ago)
+        image_699.jpg (modified 101.8 minutes ago)
+        image_701.jpg (modified 1521.3 minutes ago)
       - StudsPics
-        image_10_LegoBrick_0_c87.jpg (modified 13.6 minutes ago)
-        image_113_LegoBrick_2_c82.jpg (modified 72 minutes ago)
-        image_119_LegoBrick_1_c77.jpg (modified 72 minutes ago)
-        image_139_LegoBrick_0_c86.jpg (modified 72 minutes ago)
-        image_200_LegoBrick_0_c83.jpg (modified 1440 minutes ago)
-        image_223_LegoBrick_1_c81.jpg (modified 1440 minutes ago)
-        image_223_LegoBrick_2_c78.jpg (modified 11.2 minutes ago)
-        image_224_LegoBrick_0_c83.jpg (modified 1440 minutes ago)
-        image_226_LegoBrick_2_c77.jpg (modified 1491.5 minutes ago)
-        image_228_LegoBrick_0_c82.jpg (modified 72 minutes ago)
-        image_23_LegoBrick_0_c81.jpg (modified 72 minutes ago)
-        image_253_LegoBrick_0_c82.jpg (modified 60.7 minutes ago)
-        image_259_LegoBrick_1_c86.jpg (modified 72 minutes ago)
-        image_28_LegoBrick_0_c88.jpg (modified 58.9 minutes ago)
-        image_315_LegoBrick_0_c81.jpg (modified 72 minutes ago)
-        image_319_LegoBrick_0_c78.jpg (modified 72 minutes ago)
-        image_361_LegoBrick_3_c80.jpg (modified 1491.5 minutes ago)
-        image_62_LegoBrick_1_c84.jpg (modified 1491.5 minutes ago)
-        image_7_LegoBrick_1_c87.jpg (modified 72 minutes ago)
-        image_73_LegoBrick_1_c85.jpg (modified 1491.5 minutes ago)
+        image_10_LegoBrick_0_c87.jpg (modified 43.4 minutes ago)
+        image_113_LegoBrick_2_c82.jpg (modified 101.8 minutes ago)
+        image_119_LegoBrick_1_c77.jpg (modified 101.8 minutes ago)
+        image_139_LegoBrick_0_c86.jpg (modified 101.8 minutes ago)
+        image_200_LegoBrick_0_c83.jpg (modified 1469.8 minutes ago)
+        image_223_LegoBrick_1_c81.jpg (modified 1469.8 minutes ago)
+        image_223_LegoBrick_2_c78.jpg (modified 41 minutes ago)
+        image_224_LegoBrick_0_c83.jpg (modified 1469.8 minutes ago)
+        image_226_LegoBrick_2_c77.jpg (modified 1521.3 minutes ago)
+        image_228_LegoBrick_0_c82.jpg (modified 101.8 minutes ago)
+        image_23_LegoBrick_0_c81.jpg (modified 101.8 minutes ago)
+        image_253_LegoBrick_0_c82.jpg (modified 90.5 minutes ago)
+        image_259_LegoBrick_1_c86.jpg (modified 101.8 minutes ago)
+        image_28_LegoBrick_0_c88.jpg (modified 88.7 minutes ago)
+        image_315_LegoBrick_0_c81.jpg (modified 101.8 minutes ago)
+        image_319_LegoBrick_0_c78.jpg (modified 101.8 minutes ago)
+        image_361_LegoBrick_3_c80.jpg (modified 1521.3 minutes ago)
+        image_62_LegoBrick_1_c84.jpg (modified 1521.3 minutes ago)
+        image_7_LegoBrick_1_c87.jpg (modified 101.8 minutes ago)
+        image_73_LegoBrick_1_c85.jpg (modified 1521.3 minutes ago)
     - Test_Labels
       - LabelMe_jsons
-        image_103.json (modified 57933.3 minutes ago)
-        image_1197.json (modified 57933.2 minutes ago)
-        image_1205.json (modified 57933.2 minutes ago)
-        image_1208.json (modified 57933.2 minutes ago)
-        image_136.json (modified 57933.1 minutes ago)
-        image_1543.json (modified 57932.9 minutes ago)
-        image_1552.json (modified 57932.9 minutes ago)
-        image_1556.json (modified 57932.9 minutes ago)
-        image_1729.json (modified 57932.8 minutes ago)
-        image_1734.json (modified 57932.8 minutes ago)
-        image_196.json (modified 57932.7 minutes ago)
-        image_286.json (modified 57932.6 minutes ago)
-        image_504.json (modified 57932.5 minutes ago)
-        image_512.json (modified 57932.5 minutes ago)
-        image_834.json (modified 57932.2 minutes ago)
-        image_841.json (modified 57932.2 minutes ago)
-        image_93.json (modified 57932.2 minutes ago)
+        image_103.json (modified 57963.1 minutes ago)
+        image_1197.json (modified 57963 minutes ago)
+        image_1205.json (modified 57963 minutes ago)
+        image_1208.json (modified 57963 minutes ago)
+        image_136.json (modified 57962.9 minutes ago)
+        image_1543.json (modified 57962.8 minutes ago)
+        image_1552.json (modified 57962.8 minutes ago)
+        image_1556.json (modified 57962.8 minutes ago)
+        image_1729.json (modified 57962.6 minutes ago)
+        image_1734.json (modified 57962.6 minutes ago)
+        image_196.json (modified 57962.5 minutes ago)
+        image_286.json (modified 57962.4 minutes ago)
+        image_504.json (modified 57962.3 minutes ago)
+        image_512.json (modified 57962.3 minutes ago)
+        image_834.json (modified 57962.1 minutes ago)
+        image_841.json (modified 57962.1 minutes ago)
+        image_93.json (modified 57962 minutes ago)
       - Yolo_keipoints
         - LabelMe_Keipoints_jsons
-          image_1_LegoBrick_6_c66.json (modified 174176.1 minutes ago)
-          image_10_LegoBrick_0_c87.json (modified 174173.9 minutes ago)
-          image_180_LegoBrick_2_c82.json (modified 173888.7 minutes ago)
-          image_181_LegoBrick_2_c75.json (modified 173888.6 minutes ago)
-          image_641_LegoBrick_0_c85.json (modified 173100.5 minutes ago)
-          image_641_LegoBrick_1_c84.json (modified 173100.4 minutes ago)
-          image_643_LegoBrick_2_c84.json (modified 173098.5 minutes ago)
-          image_87_LegoBrick_4_c72.json (modified 173924.4 minutes ago)
-          image_89_LegoBrick_1_c81.json (modified 173924 minutes ago)
+          image_1_LegoBrick_6_c66.json (modified 174205.9 minutes ago)
+          image_10_LegoBrick_0_c87.json (modified 174203.7 minutes ago)
+          image_180_LegoBrick_2_c82.json (modified 173918.6 minutes ago)
+          image_181_LegoBrick_2_c75.json (modified 173918.4 minutes ago)
+          image_641_LegoBrick_0_c85.json (modified 173130.4 minutes ago)
+          image_641_LegoBrick_1_c84.json (modified 173130.2 minutes ago)
+          image_643_LegoBrick_2_c84.json (modified 173128.3 minutes ago)
+          image_87_LegoBrick_4_c72.json (modified 173954.2 minutes ago)
+          image_89_LegoBrick_1_c81.json (modified 173953.8 minutes ago)
   - results
     - bricks
     - predictions
     - studs
     - TrainingSessions
-      .gitkeep (modified 25858.2 minutes ago)
-      FolderStructure_regularYoloTraining.txt (modified 40968 minutes ago)
-      FolderStructure.txt (modified 39002.4 minutes ago)
-      GenerateStructure.ps1 (modified 40971.1 minutes ago)
+      .gitkeep (modified 25888 minutes ago)
+      FolderStructure_regularYoloTraining.txt (modified 40997.8 minutes ago)
+      FolderStructure.txt (modified 39032.2 minutes ago)
+      GenerateStructure.ps1 (modified 41000.9 minutes ago)
       - 20250123_192838bricks
         - train
           More than 20 files, summary:
-            .0: 1 files
-            .yaml: 1 files
             .png: 7 files
-            .jpg: 11 files
+            .yaml: 1 files
+            .0: 1 files
             .csv: 1 files
+            .jpg: 11 files
           - weights
-            best20250123_192838t.pt (modified 50308.1 minutes ago)
-            last.pt (modified 50308.1 minutes ago)
+            best20250123_192838t.pt (modified 50337.9 minutes ago)
+            last.pt (modified 50337.9 minutes ago)
       - 20250124_165222studs
         - train
           More than 20 files, summary:
-            .0: 1 files
-            .yaml: 1 files
             .png: 7 files
-            .jpg: 11 files
+            .yaml: 1 files
+            .0: 1 files
             .csv: 1 files
+            .jpg: 11 files
           - weights
-            best.pt (modified 49023.7 minutes ago)
-            last.pt (modified 49023.7 minutes ago)
+            best.pt (modified 49053.5 minutes ago)
+            last.pt (modified 49053.5 minutes ago)
       - 20250124_170824studs
         - train
           More than 20 files, summary:
-            .0: 1 files
-            .yaml: 1 files
             .png: 7 files
-            .jpg: 14 files
+            .yaml: 1 files
+            .0: 1 files
             .csv: 1 files
+            .jpg: 14 files
           - weights
-            best.pt (modified 48991.1 minutes ago)
-            last.pt (modified 48991.1 minutes ago)
+            best.pt (modified 49020.9 minutes ago)
+            last.pt (modified 49020.9 minutes ago)
   - scripts
     - __pycache__
-      __init__.cpython-312.pyc (modified 55747.3 minutes ago)
-      pipeline_setup.cpython-310.pyc (modified 39046.5 minutes ago)
-      pipeline.cpython-312.pyc (modified 55747.3 minutes ago)
-      visualize_presentation.cpython-312.pyc (modified 55747.2 minutes ago)
+      __init__.cpython-312.pyc (modified 55777.1 minutes ago)
+      pipeline_setup.cpython-310.pyc (modified 39076.3 minutes ago)
+      pipeline.cpython-312.pyc (modified 55777.1 minutes ago)
+      visualize_presentation.cpython-312.pyc (modified 55777 minutes ago)
     - Legacy_scripts
-      __init__.py (modified 55785.8 minutes ago)
-      apply_new_folder_tree.ps1 (modified 89.8 minutes ago)
-      cli.py (modified 39143.8 minutes ago)
-      Dockerfile (modified 39996.4 minutes ago)
-      Generate_folders_ImageDataProject.py (modified 56075 minutes ago)
-      gitkeep_creator.ps1 (modified 89.8 minutes ago)
-      model_utils.py (modified 17328.7 minutes ago)
-      organize_files_script.py (modified 56075 minutes ago)
-      pipeline_inference_part1.py (modified 89.8 minutes ago)
-      pipeline_report_viz.py (modified 50252.7 minutes ago)
-      pipeline_setup.py (modified 89.8 minutes ago)
-      pipeline_train.py (modified 89.8 minutes ago)
-      pipeline_utils.py (modified 89.8 minutes ago)
-      pipeline.py (modified 55871.5 minutes ago)
-      PyPl_publish.py (modified 55778.8 minutes ago)
-      pyproject.toml (modified 39053 minutes ago)
-      ReorganizeProject.ps1 (modified 89.8 minutes ago)
-      setup.py (modified 39053.1 minutes ago)
-      test_export_logs.py (modified 89.8 minutes ago)
-      visualize_presentation.py (modified 55866.3 minutes ago)
+      __init__.py (modified 55815.6 minutes ago)
+      apply_new_folder_tree.ps1 (modified 119.6 minutes ago)
+      cli.py (modified 39173.6 minutes ago)
+      Dockerfile (modified 40026.2 minutes ago)
+      Generate_folders_ImageDataProject.py (modified 56104.8 minutes ago)
+      gitkeep_creator.ps1 (modified 119.6 minutes ago)
+      model_utils.py (modified 17358.5 minutes ago)
+      organize_files_script.py (modified 56104.8 minutes ago)
+      pipeline_inference_part1.py (modified 119.6 minutes ago)
+      pipeline_report_viz.py (modified 50282.5 minutes ago)
+      pipeline_setup.py (modified 119.6 minutes ago)
+      pipeline_train.py (modified 119.6 minutes ago)
+      pipeline_utils.py (modified 119.6 minutes ago)
+      pipeline.py (modified 55901.3 minutes ago)
+      PyPl_publish.py (modified 55808.6 minutes ago)
+      pyproject.toml (modified 39082.9 minutes ago)
+      ReorganizeProject.ps1 (modified 119.6 minutes ago)
+      setup.py (modified 39082.9 minutes ago)
+      test_export_logs.py (modified 119.6 minutes ago)
+      visualize_presentation.py (modified 55896.1 minutes ago)
   - tests
-    test_model_utils.py (modified 11.6 minutes ago)
-    test_train.py (modified 7.3 minutes ago)
+    test_model_utils.py (modified 41.4 minutes ago)
+    test_train.py (modified 37.1 minutes ago)
     - __pycache__
-      test_lego_cli.cpython-310-pytest-8.3.4.pyc (modified 96.2 minutes ago)
-      test_lego_cli.cpython-310.pyc (modified 114.6 minutes ago)
-      test_model_utils.cpython-310-pytest-8.3.4.pyc (modified 11.4 minutes ago)
-      test_model_utils.cpython-310.pyc (modified 328.8 minutes ago)
+      test_lego_cli.cpython-310-pytest-8.3.4.pyc (modified 126 minutes ago)
+      test_lego_cli.cpython-310.pyc (modified 144.4 minutes ago)
+      test_model_utils.cpython-310-pytest-8.3.4.pyc (modified 41.2 minutes ago)
+      test_model_utils.cpython-310.pyc (modified 358.6 minutes ago)
     - test_results
       - full_algorithm_20250227_175000
-        full_algorithm_20250227_175000.jpg (modified 11.1 minutes ago)
-        fullyScannedImage.jpg (modified 11.1 minutes ago)
+        full_algorithm_20250227_175000.jpg (modified 40.9 minutes ago)
+        fullyScannedImage.jpg (modified 40.9 minutes ago)
   - utils
-    data_utils.py (modified 89.8 minutes ago)
-    model_utils.py (modified 5.4 minutes ago)
+    data_utils.py (modified 119.6 minutes ago)
+    model_utils.py (modified 35.2 minutes ago)
     - __pycache__
-      model_utils.cpython-310.pyc (modified 13.8 minutes ago)
+      model_utils.cpython-310.pyc (modified 43.7 minutes ago)
