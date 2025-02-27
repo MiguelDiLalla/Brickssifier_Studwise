@@ -1,35 +1,81 @@
-# Training Capabilities
+# LEGO Bricks ML Vision
 
-The training functionality is provided by the [`train`](cli.py) command. This command starts the YOLO model training pipeline with configurable parameters and automatic logging.
+A machine learning project for detecting and classifying LEGO bricks through computer vision.
 
-## Command Usage
+## Project Overview
 
-```sh
-python3 cli.py train --mode <bricks|studs> [OPTIONS]
+This project demonstrates a complete machine learning workflow for LEGO brick detection and classification:
+
+1. **Brick Detection**: Identifying LEGO bricks in images using YOLOv8
+2. **Stud Detection**: Locating individual studs on detected bricks
+3. **Dimension Classification**: Determining brick dimensions (e.g., 2x4) based on stud patterns
+
+## Key Features
+
+- Complete ML pipeline from dataset preparation to inference
+- Multiple detection models (bricks and studs)
+- Command-line interface for all operations
+- Rich metadata handling with EXIF storage
+- Professional logging and error handling
+- Visualization tools for model results
+
+## Technical Components
+
+- **Training Pipeline**: Custom training process for YOLO models
+- **Inference Engine**: Optimized detection and classification system
+- **Dataset Utilities**: Tools for converting annotations between formats
+- **CLI Tools**: User-friendly command-line interface
+
+## Getting Started
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/LEGO_Bricks_ML_Vision.git
+cd LEGO_Bricks_ML_Vision
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-### Options
+### Usage Examples
 
-- --mode: (required) Specifies the training mode. Accepted values: bricks or studs.
-- --epochs: Sets the number of training epochs. (Default: 20)
-- --batch-size: Sets the batch size for training. (Default: 16)
-- --use-pretrained: Use a pre-trained LEGO model instead of training from scratch.
-- --cleanup / --no-cleanup: Enable or disable removal of temporary directories (cache, logs, results) after training. (Default: cleanup enabled)
-- --force-extract: Force re-extraction of the dataset even if it already exists.
-- --show-results / --no-show-results: Enable or disable the display of training session results after execution. (Default: show-results enabled)
-
-### Example
-
-Start a training session in "bricks" mode using a pre-trained model, with 10 epochs and a batch size of 16:
-
-```sh
-python3 cli.py train --mode bricks --use-pretrained --epochs 10 --batch-size 16
+Train a model:
+```bash
+python lego_cli.py train --mode bricks --epochs 20
 ```
 
-### How It Works
+Run inference on an image:
+```bash
+python lego_cli.py infer --images path/to/image.jpg
+```
 
-The command assembles the training arguments and invokes train.py with the specified options.
-Logging is configured via the EmojiFormatter and setup_logging functions, ensuring that all training steps are logged with visual cues.
-Post-training, if enabled, temporary directories (such as cache and results) are cleaned up automatically.
+Process dataset annotations:
+```bash
+python lego_cli.py data-processing labelme-to-yolo --input path/to/json --output path/to/output
+```
 
-For more details on the training process and logging configuration, please refer to the train.py and cli.py files.
+## Project Structure
+
+```
+LEGO_Bricks_ML_Vision/
+├── train.py                 # Training pipeline
+├── lego_cli.py              # Command-line interface
+├── utils/
+│   ├── model_utils.py       # Core inference and processing
+│   └── data_utils.py        # Dataset processing utilities
+├── tests/                   # Unit tests
+├── presentation/            # Demo materials and test images
+│   ├── Models_DEMO/         # Pre-trained models
+│   └── Test_images/         # Sample images
+└── docs/                    # Documentation
+```
+
+## Portfolio Context
+
+This project was created as a first portfolio project by an aspiring junior data scientist. Although focused on computer vision, it demonstrates a comprehensive understanding of the machine learning development process from data preparation through model deployment.
+
+## License
+
+[License information]
