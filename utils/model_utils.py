@@ -22,6 +22,14 @@ from ultralytics import YOLO
 import piexif
 import cv2
 from PIL import Image, ImageDraw, ImageFont
+import rich
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+
+# Initialize rich console
+console = Console()
 
 # Set up professional logging with emoji markers
 logging.basicConfig(
@@ -342,173 +350,173 @@ def extract_metadata_from_yolo_result(results, orig_image):
     }
     return metadata
 
-def render_metadata(image, metadata, LOGO=config["LOGO_NUMPY"]):
-    """
-    Creates a metadata panel with a logo at the bottom, wrapping text that is too long.
+# def render_metadata(image, metadata, LOGO=config["LOGO_NUMPY"]):
+#     """
+#     Creates a metadata panel with a logo at the bottom, wrapping text that is too long.
 
-    Args:
-        image (np.ndarray): Source image.
-        metadata (dict): Metadata to render as key: value pairs.
-        LOGO (np.ndarray): Logo image.
+#     Args:
+#         image (np.ndarray): Source image.
+#         metadata (dict): Metadata to render as key: value pairs.
+#         LOGO (np.ndarray): Logo image.
 
-    Returns:
-        np.ndarray: Metadata panel image.
-    """
-    # Remove the specified keys from metadata
-    render_metadata = metadata.copy()
-    render_metadata.pop("boxes_coordinates", None)
-    render_metadata.pop("Repository", None)
+#     Returns:
+#         np.ndarray: Metadata panel image.
+#     """
+#     # Remove the specified keys from metadata
+#     render_metadata = metadata.copy()
+#     render_metadata.pop("boxes_coordinates", None)
+#     render_metadata.pop("Repository", None)
     
     
     
-    # -- Convert input image to PIL and get dimensions --
-    img_pil = Image.fromarray(image)
-    img_width, img_height = img_pil.size
+#     # -- Convert input image to PIL and get dimensions --
+#     img_pil = Image.fromarray(image)
+#     img_width, img_height = img_pil.size
 
-    # -- Define panel dimensions --
-    panel_width = img_width // 4      # 1/4 of image width
-    panel_height = img_height         # same height as the source image
-    text_margin = 10
+#     # -- Define panel dimensions --
+#     panel_width = img_width // 4      # 1/4 of image width
+#     panel_height = img_height         # same height as the source image
+#     text_margin = 10
 
-    # -- Create a red panel (we'll render text + logo on this) --
-    panel = Image.new("RGB", (panel_width, panel_height), color=(255, 0, 0))
+#     # -- Create a red panel (we'll render text + logo on this) --
+#     panel = Image.new("RGB", (panel_width, panel_height), color=(255, 0, 0))
 
-    # -- Prepare to draw on the panel --
-    draw = ImageDraw.Draw(panel)
+#     # -- Prepare to draw on the panel --
+#     draw = ImageDraw.Draw(panel)
 
-    # -- Convert LOGO (np.ndarray) to PIL and resize to panel width --
-    logo_img = Image.fromarray(LOGO)
-    orig_logo_w, orig_logo_h = logo_img.size
-    logo_width = panel_width
-    logo_height = int(logo_width * orig_logo_h / orig_logo_w)  # maintain aspect ratio
-    logo_img = logo_img.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+#     # -- Convert LOGO (np.ndarray) to PIL and resize to panel width --
+#     logo_img = Image.fromarray(LOGO)
+#     orig_logo_w, orig_logo_h = logo_img.size
+#     logo_width = panel_width
+#     logo_height = int(logo_width * orig_logo_h / orig_logo_w)  # maintain aspect ratio
+#     logo_img = logo_img.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
 
-    # Reserve space at the bottom of the panel for the logo
-    max_text_height = panel_height - logo_height - text_margin
+#     # Reserve space at the bottom of the panel for the logo
+#     max_text_height = panel_height - logo_height - text_margin
 
-    # Build a list of lines from metadata (each item is "key: value")
-    lines = [f"{k}: {v}" for k, v in render_metadata.items()]
+#     # Build a list of lines from metadata (each item is "key: value")
+#     lines = [f"{k}: {v}" for k, v in render_metadata.items()]
 
-    # -------------------------------------------------
-    # 1) Define a helper to wrap a single line to fit max_width
-    # -------------------------------------------------
-    def wrap_line(line, font, draw, max_width):
-        """
-        Splits a single string into multiple sub-lines so that
-        none exceed max_width in pixels.
-        """
-        words = line.split()
-        wrapped_lines = []
-        current_line = ""
+#     # -------------------------------------------------
+#     # 1) Define a helper to wrap a single line to fit max_width
+#     # -------------------------------------------------
+#     def wrap_line(line, font, draw, max_width):
+#         """
+#         Splits a single string into multiple sub-lines so that
+#         none exceed max_width in pixels.
+#         """
+#         words = line.split()
+#         wrapped_lines = []
+#         current_line = ""
 
-        for word in words:
-            # Try adding this word to the current line
-            candidate_line = (current_line + " " + word).strip()
-            bbox = draw.textbbox((0, 0), candidate_line, font=font)
-            line_width = bbox[2] - bbox[0]
+#         for word in words:
+#             # Try adding this word to the current line
+#             candidate_line = (current_line + " " + word).strip()
+#             bbox = draw.textbbox((0, 0), candidate_line, font=font)
+#             line_width = bbox[2] - bbox[0]
 
-            if line_width <= max_width:
-                # It fits, so update current_line
-                current_line = candidate_line
-            else:
-                # It doesn't fit, so push current_line to wrapped_lines
-                wrapped_lines.append(current_line)
-                # Start a new line with the current word
-                current_line = word
+#             if line_width <= max_width:
+#                 # It fits, so update current_line
+#                 current_line = candidate_line
+#             else:
+#                 # It doesn't fit, so push current_line to wrapped_lines
+#                 wrapped_lines.append(current_line)
+#                 # Start a new line with the current word
+#                 current_line = word
 
-        # Add the last line if it's not empty
-        if current_line:
-            wrapped_lines.append(current_line)
+#         # Add the last line if it's not empty
+#         if current_line:
+#             wrapped_lines.append(current_line)
 
-        return wrapped_lines
+#         return wrapped_lines
 
-    # -------------------------------------------------
-    # 2) Find a single font size that fits all lines
-    #    (with wrapping) into the available width & height.
-    # -------------------------------------------------
-    def find_consistent_font_size(lines, max_width, max_height, initial_size=20):
-        """
-        Returns the largest font (<= initial_size) that can fit
-        all lines (with wrapping) within max_width x max_height.
-        """
-        for size in range(initial_size, 0, -1):
-            try:
-                # Using a bolder console style font
-                font = ImageFont.truetype("consolab.ttf", size)
-            except IOError:
-                # Fallback if 'consolab.ttf' not found
-                font = ImageFont.load_default()
-                # Once we fall back, let's just return it
-                return font
+#     # -------------------------------------------------
+#     # 2) Find a single font size that fits all lines
+#     #    (with wrapping) into the available width & height.
+#     # -------------------------------------------------
+#     def find_consistent_font_size(lines, max_width, max_height, initial_size=20):
+#         """
+#         Returns the largest font (<= initial_size) that can fit
+#         all lines (with wrapping) within max_width x max_height.
+#         """
+#         for size in range(initial_size, 0, -1):
+#             try:
+#                 # Using a bolder console style font
+#                 font = ImageFont.truetype("consolab.ttf", size)
+#             except IOError:
+#                 # Fallback if 'consolab.ttf' not found
+#                 font = ImageFont.load_default()
+#                 # Once we fall back, let's just return it
+#                 return font
 
-            total_height = 0
-            # We'll check each line's wrapped sub-lines
-            for line in lines:
-                sublines = wrap_line(line, font, draw, max_width)
-                for sub in sublines:
-                    bbox = draw.textbbox((0, 0), sub, font=font)
-                    line_height = bbox[3] - bbox[1]
-                    total_height += line_height + text_margin
+#             total_height = 0
+#             # We'll check each line's wrapped sub-lines
+#             for line in lines:
+#                 sublines = wrap_line(line, font, draw, max_width)
+#                 for sub in sublines:
+#                     bbox = draw.textbbox((0, 0), sub, font=font)
+#                     line_height = bbox[3] - bbox[1]
+#                     total_height += line_height + text_margin
 
-            # If everything fits within the panel's text area, return this font
-            if total_height <= max_height:
-                return font
+#             # If everything fits within the panel's text area, return this font
+#             if total_height <= max_height:
+#                 return font
 
-        # If nothing fits, return a default small font
-        return ImageFont.load_default()
+#         # If nothing fits, return a default small font
+#         return ImageFont.load_default()
 
-    # -- Compute a single font that can handle all lines + wrapping --
-    available_width = panel_width - 2 * text_margin
-    font = find_consistent_font_size(
-        lines,
-        max_width=available_width,
-        max_height=max_text_height,
-        initial_size=20
-    )
+#     # -- Compute a single font that can handle all lines + wrapping --
+#     available_width = panel_width - 2 * text_margin
+#     font = find_consistent_font_size(
+#         lines,
+#         max_width=available_width,
+#         max_height=max_text_height,
+#         initial_size=20
+#     )
 
-    # -------------------------------------------------
-    # 3) Actually render text line-by-line with wrapping
-    # -------------------------------------------------
-    current_y = text_margin
-    for line in lines:
-        sublines = wrap_line(line, font, draw, available_width)
-        for sub in sublines:
-            bbox = draw.textbbox((0, 0), sub, font=font)
-            line_height = bbox[3] - bbox[1]
-            # If we don't have enough space left, stop
-            if current_y + line_height > max_text_height:
-                break
-            draw.text((text_margin, current_y), sub, fill=(255, 255, 255), font=font)
-            current_y += line_height + text_margin
+#     # -------------------------------------------------
+#     # 3) Actually render text line-by-line with wrapping
+#     # -------------------------------------------------
+#     current_y = text_margin
+#     for line in lines:
+#         sublines = wrap_line(line, font, draw, available_width)
+#         for sub in sublines:
+#             bbox = draw.textbbox((0, 0), sub, font=font)
+#             line_height = bbox[3] - bbox[1]
+#             # If we don't have enough space left, stop
+#             if current_y + line_height > max_text_height:
+#                 break
+#             draw.text((text_margin, current_y), sub, fill=(255, 255, 255), font=font)
+#             current_y += line_height + text_margin
 
-    # -- Paste the logo at the bottom of the panel using Photoshop "screen" blend mode --
-    logo_y = panel_height - logo_height
-    # Extract the panel region where the logo will be blended
-    panel_region = panel.crop((0, logo_y, logo_width, panel_height))
-    # Convert both images to numpy arrays for blending
-    np_panel = np.array(panel_region).astype(float)
-    np_logo = np.array(logo_img).astype(float)
-    # Apply the screen blend formula: result = 255 - ((255 - background) * (255 - foreground) / 255)
-    blended = 255 - ((255 - np_panel) * (255 - np_logo) / 255)
-    blended = blended.astype(np.uint8)
-    blended_region = Image.fromarray(blended)
-    # Paste the blended result back onto the panel
-    panel.paste(blended_region, (0, logo_y))
+#     # -- Paste the logo at the bottom of the panel using Photoshop "screen" blend mode --
+#     logo_y = panel_height - logo_height
+#     # Extract the panel region where the logo will be blended
+#     panel_region = panel.crop((0, logo_y, logo_width, panel_height))
+#     # Convert both images to numpy arrays for blending
+#     np_panel = np.array(panel_region).astype(float)
+#     np_logo = np.array(logo_img).astype(float)
+#     # Apply the screen blend formula: result = 255 - ((255 - background) * (255 - foreground) / 255)
+#     blended = 255 - ((255 - np_panel) * (255 - np_logo) / 255)
+#     blended = blended.astype(np.uint8)
+#     blended_region = Image.fromarray(blended)
+#     # Paste the blended result back onto the panel
+#     panel.paste(blended_region, (0, logo_y))
 
-    # -- Convert the panel back to NumPy array and return --
-    panel_bgr = cv2.cvtColor(np.array(panel), cv2.COLOR_RGB2BGR)
-    return panel_bgr
+#     # -- Convert the panel back to NumPy array and return --
+#     panel_bgr = cv2.cvtColor(np.array(panel), cv2.COLOR_RGB2BGR)
+#     return panel_bgr
 
 
-def composite_inference_branded_image(annotated_image, rendered_metadata, margin=10):
-    """
-    Combines the annotated image with the rendered metadata panel and adds a red border. 🎨
-    Returns the final composite image.
-    """
-    composite_no_margin = np.hstack((annotated_image, rendered_metadata))
-    composite_image = cv2.copyMakeBorder(composite_no_margin, margin, margin, margin, margin,
-                                           borderType=cv2.BORDER_CONSTANT, value=(0, 0, 255))
-    return composite_image
+# def composite_inference_branded_image(annotated_image, rendered_metadata, margin=10):
+#     """
+#     Combines the annotated image with the rendered metadata panel and adds a red border. 🎨
+#     Returns the final composite image.
+#     """
+#     composite_no_margin = np.hstack((annotated_image, rendered_metadata))
+#     composite_image = cv2.copyMakeBorder(composite_no_margin, margin, margin, margin, margin,
+#                                            borderType=cv2.BORDER_CONSTANT, value=(0, 0, 255))
+#     return composite_image
 
 # =============================================================================
 # annotate_image Function
@@ -712,113 +720,78 @@ def clean_exif_metadata(image_path):
 # Brick Detection Function
 # =============================================================================
 
-def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder="", force_ran=False):
+def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder=""):
     """
-    Performs brick detection using the provided YOLO model.
-    Accepts either an image file path or a numpy array.
-    Defaults to the loaded brick model if model is None.
-    Optionally saves annotated image and metadata JSON. 🎯
-    Returns a dictionary with original image, annotated image, cropped detections, and metadata.
+    Performs brick detection using the provided YOLO model with rich progress display.
     """
-
-    # message if output folder is not provided
-    if not output_folder:
-        logger.warning("⚠️ No output folder provided. Results will not be saved.")
-
-
-    if model is None:
-        model = config.get("LOADED_MODELS", {}).get("bricks")
+    # Define results at the beginning to ensure it exists
+    results = None
+    
+    with console.status("[bold green]Loading image and model...") as status:
+        # Load model if not provided
         if model is None:
-            logger.error("❌ No brick model loaded.")
-            return None
-
-    if isinstance(image_input, str):
-        image = cv2.imread(image_input)
-        detection_results = read_detection(image_input)
-        if detection_results and detection_results.get("status") == "success":
-            logger.info("✅ Detected bricks from image: %s", image_input)
-            if save_annotated:
-                annotated_image = detection_results.get("annotated_image")
-                annotated_path = os.path.join(output_folder, "annotated_image.jpg")
-                cv2.imwrite(annotated_path, annotated_image)
-                logger.info("💾 Annotated image saved at: %s", annotated_path)
-                detection_results["metadata"]["annotated_image_path"] = annotated_path
-            if save_json:
-                json_path = os.path.join(output_folder, "metadata.json")
-                with open(json_path, "w") as json_file:
-                    json.dump(detection_results["metadata"], json_file, indent=4)
-                detection_results["metadata"]["json_results_path"] = json_path
-                logger.info("💾 Metadata JSON saved at: %s", json_path)
-            return detection_results
-        if image is None:
-            logger.error("❌ Failed to load image from path: %s", image_input)
-            return None
-    else:
-        image = image_input
-
-    try:
-        orig_image = image.copy()
-        annotated_image = image.copy()
-        results = model.predict(source=image, conf=conf)
-        if isinstance(image_input, str):
-            results[0].path = image_input
-        boxes_np = (results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([]))
-        if boxes_np.size == 0:
-            logger.warning("⚠️ No detections found.")
-            boxes_np = np.array([[10, 10, 100, 100]])
-
-        annotated_image = results[0].plot() 
+            model = config.get("LOADED_MODELS", {}).get("bricks")
+            if model is None:
+                logger.error("❌ No bricks model loaded.")
+                return None
         
+        # Load image
+        if isinstance(image_input, str):
+            image = cv2.imread(image_input)
+            if image is None:
+                logger.error("❌ Failed to load image from path: %s", image_input)
+                return None
+        else:
+            image = image_input
+            
+        if not output_folder:
+            console.print("[yellow]⚠️ No output folder provided. Results will not be saved.[/]")
+        
+        status.update("[bold green]Running detection...")
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TextColumn("[bold green]{task.completed}/{task.total}"),
+        TimeElapsedColumn()
+    ) as progress:
+        detection_task = progress.add_task("[green]Detecting bricks...", total=100)
+        
+        # Run detection
+        results = model.predict(source=image, conf=conf)
+        progress.update(detection_task, advance=50)
+        
+        metadata = extract_metadata_from_yolo_result(results, image_input)
+        boxes_np = results[0].boxes.xyxy.cpu().numpy() if results and len(results) > 0 and results[0].boxes.xyxy is not None else np.array([])
+        annotated_image = results[0].plot(labels=True) if boxes_np.size > 0 else image.copy()
         
         cropped_detections = []
-        for idx, box in enumerate(boxes_np):
-            x1, y1, x2, y2 = map(int, box[:4])
-            crop = orig_image[y1:y2, x1:x2]
+        for box in boxes_np:
+            x1, y1, x2, y2 = map(int, box)
+            crop = image[y1:y2, x1:x2]
             cropped_detections.append(crop)
-            # cv2.rectangle(orig_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            # cv2.putText(orig_image, f"Brick {idx}", (x1, y1-10),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        metadata = extract_metadata_from_yolo_result(results, orig_image)
-
-        if not output_folder:
-            output_folder = os.path.join(os.getcwd(), "results", "bricks")
-        os.makedirs(output_folder, exist_ok=True)
         
-        # if save_annotated:
-        #     rendered_metadata = render_metadata(annotated_image, metadata)
-        #     composite_image = composite_inference_branded_image(annotated_image, rendered_metadata)
-        #     composite_path = os.path.join(output_folder, "composite_image.jpg")
-        #     cv2.imwrite(composite_path, composite_image)
-        #     metadata["annotated_image_path"] = composite_path
-        #     logger.info("💾 Composite image saved at: %s", composite_path)
-
-        if save_annotated:
-            annotated_path = os.path.join(output_folder, "annotated_image.jpg")
-            cv2.imwrite(annotated_path, annotated_image)
-            metadata["annotated_image_path"] = annotated_path
-            logger.info("💾 Annotated image saved at: %s", annotated_path)
-
-        if save_json:
-            json_path = os.path.join(output_folder, "metadata.json")
-            with open(json_path, "w") as json_file:
-                json.dump(metadata, json_file, indent=4)
-            metadata["json_results_path"] = json_path
-            logger.info("💾 Metadata JSON saved at: %s", json_path)
-
-        if isinstance(image_input, str):
-            write_exif(image_input, metadata)
-        elif save_annotated and metadata.get("annotated_image_path"):
-            write_exif(metadata["annotated_image_path"], metadata)
+        progress.update(detection_task, completed=100)
+    
+    # Check results safely after it's been defined
+    if results and len(results) > 0:
+        table = Table(title="Brick Detection Results")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+        table.add_row("Bricks detected", str(len(boxes_np)))
+        table.add_row("Confidence threshold", f"{conf:.2f}")
+        table.add_row("Processing time", f"{metadata['speed']['inference']:.3f}s")
         
-        return {
-            "orig_image": orig_image,
-            "annotated_image": annotated_image,
-            "cropped_detections": cropped_detections,
-            "metadata": metadata
-        }
-    except Exception as e:
-        logger.error("❌ Error during brick detection: %s", e)
-        return None
+        console.print(Panel(table, title="[bold]Detection Complete[/]", border_style="green"))
+    
+    return {
+        "orig_image": image,
+        "annotated_image": annotated_image,
+        "cropped_detections": cropped_detections,
+        "metadata": metadata,
+        "boxes": boxes_np
+    }
 
 # =============================================================================
 # Placeholder Functions for Stud Detection and Dimension Classification
@@ -1007,7 +980,6 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
         "orig_image": orig_image,
         "annotated_image": annotated_image,
         "dimension": metadata.get("dimension", "Error"),
-        # "cropped_detections": cropped_detections,
         "metadata": metadata
     }
 
@@ -1085,8 +1057,11 @@ def run_full_algorithm(image_path, save_annotated=False, output_folder="", force
         resized_images = [cv2.resize(image, (int(image.shape[1] * height / image.shape[0]), height)) for image in sorted_images]
         # stack them horizontally
         studs_image = np.hstack(resized_images)
-        #resize the studs image to the same width as the base image
-        studs_image = cv2.resize(studs_image, (base_image.shape[1], studs_image.shape[0]))
+        # Resize the studs image to match the base image width while preserving aspect ratio
+        width_ratio = base_image.shape[1] / studs_image.shape[1]  # scaling factor
+        new_width = base_image.shape[1]
+        new_height = int(studs_image.shape[0] * width_ratio)
+        studs_image = cv2.resize(studs_image, (new_width, new_height))
         # stack them vertically, base image on top
         composite_image = np.vstack((base_image, studs_image))
 
@@ -1165,17 +1140,6 @@ def run_full_algorithm(image_path, save_annotated=False, output_folder="", force
         "composite_image": composite_image
     }
 
-
-
-    
-
-    
-    
- 
-
-# =============================================================================
-# Metadata Rendering Functions
-# =============================================================================
 
 
 # =============================================================================
