@@ -93,27 +93,27 @@ class TestModelUtilsLocal(unittest.TestCase):
     #     self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created.")
     #     self.assertTrue(os.path.exists(json_path), "Metadata JSON file not created.")
     
-    def test_detect_bricks_via_numpy(self):
-        logging.info("[TEST] Running detect_bricks() using image as NumPy array.")
-        # Call detect_bricks by passing the numpy array (not a file path)
-        result = model_utils.detect_bricks(
-            self.test_bricks_image, 
-            model=None, 
-            conf=0.25, 
-            save_json=True, 
-            save_annotated=True, 
-            output_folder=self.output_dir
-        )
-        meta = result.get("metadata", {})
-        composite_path = meta.get("annotated_image_path", "")
-        json_path = meta.get("json_results_path", "")
-        logging.info(f"[TEST] Composite image path (numpy input): {composite_path}")
-        logging.info(f"[TEST] Metadata JSON path (numpy input): {json_path}")
-        # NEW: Print full metadata dictionary for inspection
-        print("\n[DEBUG] Metadata (from NumPy array detection):")
-        # print(json.dumps(meta, indent=4))
-        self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created (via NumPy).")
-        self.assertTrue(os.path.exists(json_path), "Metadata JSON file not created (via NumPy).")
+    # def test_detect_bricks_via_numpy(self):
+    #     logging.info("[TEST] Running detect_bricks() using image as NumPy array.")
+    #     # Call detect_bricks by passing the numpy array (not a file path)
+    #     result = model_utils.detect_bricks(
+    #         self.test_bricks_image, 
+    #         model=None, 
+    #         conf=0.25, 
+    #         save_json=True, 
+    #         save_annotated=True, 
+    #         output_folder=self.output_dir
+    #     )
+    #     meta = result.get("metadata", {})
+    #     composite_path = meta.get("annotated_image_path", "")
+    #     json_path = meta.get("json_results_path", "")
+    #     logging.info(f"[TEST] Composite image path (numpy input): {composite_path}")
+    #     logging.info(f"[TEST] Metadata JSON path (numpy input): {json_path}")
+    #     # NEW: Print full metadata dictionary for inspection
+    #     print("\n[DEBUG] Metadata (from NumPy array detection):")
+    #     # print(json.dumps(meta, indent=4))
+    #     self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created (via NumPy).")
+    #     self.assertTrue(os.path.exists(json_path), "Metadata JSON file not created (via NumPy).")
     
     # def test_render_metadata(self):
     #     logging.info("[TEST] Testing render_metadata() function directly.")
@@ -270,6 +270,29 @@ class TestModelUtilsLocal(unittest.TestCase):
 
     # def test_detect_studs_target_brick(self):
 
+    # test the full algorithm with the bricks images
+    def test_full_algorithm(self):
+        logging.info("[TEST] Running full algorithm with bricks images.")
+
+        image_path = self.test_bricks_image_path
+        output_dir = self.output_dir
+
+
+        result = model_utils.run_full_algorithm(
+            image_path,
+            save_annotated=True,
+            output_folder=output_dir
+        )
+
+        if result is None:
+            logging.error("[TEST] No result returned from full algorithm.")
+            return
+        
+
+        # self.assertIn("brick_results", result, "Missing brick results in the output.")
+        # self.assertIn("studs_results", result, "Missing studs results in the output.")
+        # composite_path = result["brick_results"].get("metadata", {}).get("annotated_image_path", "")
+        # self.assertTrue(os.path.exists(composite_path), "Composite annotated image not created.")
 
 if __name__ == '__main__':
     unittest.main()

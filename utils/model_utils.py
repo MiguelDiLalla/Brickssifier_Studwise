@@ -137,8 +137,8 @@ def setup_utils(repo_download=False):
         6: ["3x2", "6x1"],
         8: ["4x2", "8x1"],
         10: "10x1",
-        12: "6x2",
-        16: "8x2",
+        12: ["6x2", "12x1"],
+        16: ["4x4", "8x2"]
     }
 
     # Default EXIF metadata backbone.
@@ -1010,8 +1010,163 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
         # "cropped_detections": cropped_detections,
         "metadata": metadata
     }
+
+def run_full_algorithm(image_path, save_annotated=False, output_folder="", force_ran=False, logo=config["LOGO_NUMPY"]):
+    """
+    Runs the full algorithm for brick detection and dimension classification.
+    Accepts an image file path and returns the final results dictionary.
+    """
+    # handle empty output folder
+    if output_folder == "" and save_annotated:
+        # in the CWD inside test/test_results/
+
+        output_folder = os.path.join(os.getcwd(), "test", "test_results")
+        os.makedirs(output_folder, exist_ok=True)
+        logger.info("📂 Output folder not provided. Saving results in: %s", output_folder)
+
+    # Load the image
+    image = cv2.imread(image_path)
+    if image is None:
+        logger.error("❌ Failed to load image from path: %s", image_path)
+        return None
+
+    # Load the brick model and run brick detection
+    brick_results = detect_bricks(image, save_annotated=False, save_json=False, output_folder=output_folder)
+    if brick_results is None:
+        logger.error("❌ Error during brick detection.")
+        return None
+
+    # If cropped_detections is greater than 1, run studs detection on each cropped detection
+    # Store the results in a list
+  
     
+    cropped_detections = brick_results.get("cropped_detections", [])
+    #log number of cropped detections
+    logger.info(f"🔍 Found {len(cropped_detections)} cropped detections.")
+    studs_results = []
+    if len(cropped_detections) > 1:
+        for idx, crop in enumerate(cropped_detections):
+            logger.info(f"🔍 Running studs detection on cropped detection number {idx + 1}.")
+            studs_result = detect_studs(crop, save_annotated=False)
+            if studs_result is None:
+                logger.error("❌ No studs detected in cropped detection number %s.", idx + 1)
+                continue
+            studs_results.append(studs_result)
+            
+    elif len(cropped_detections) == 1:
+        logger.info(f"🔍 Running studs detection on cropped detection.")
+        studs_result = detect_studs(cropped_detections[0], save_annotated=False)
+        if studs_result is None:
+            logger.error("❌ Nothing detected at all!.")
+            return None
+        studs_results = [studs_result]
+    else:
+        logger.warning("⚠️ No brick detected. running studs detection on the original image.")
+        studs_result = detect_studs(image_path, save_annotated=False)
+        if studs_result is None:
+            logger.error("❌ Nothing detected at all!")
+            return None
+        studs_results = [studs_result]
+
+    #log the len of the studs results
+    logger.info(f"🔍 Found {len(studs_results)} valid studs results. Classifiying dimension...")
+
+    if len(studs_results) > 1:
+        base_image = brick_results.get("annotated_image")
+
+        # list all the annotated images from the studs detection
+        annotated_studs_images = [result.get("annotated_image") for result in studs_results]
+        # calculate the area of each cropped & annotated image
+        areas = [image.shape[0] * image.shape[1] for image in annotated_studs_images]
+        # sort them by area descending
+        sorted_images = [image for _, image in sorted(zip(areas, annotated_studs_images), reverse=True)]
+        # preserving the aspect ratio, resize all the images to the same height as the first one
+        height = sorted_images[0].shape[0]
+        resized_images = [cv2.resize(image, (int(image.shape[1] * height / image.shape[0]), height)) for image in sorted_images]
+        # stack them horizontally
+        studs_image = np.hstack(resized_images)
+        #resize the studs image to the same width as the base image
+        studs_image = cv2.resize(studs_image, (base_image.shape[1], studs_image.shape[0]))
+        # stack them vertically, base image on top
+        composite_image = np.vstack((base_image, studs_image))
+
+        # Stack the logo at the bottom of the composite image using Photoshop "screen" blend mode
+        if logo is not None:
+            # Resize logo to match the width of the composite image
+            logo_height, logo_width = logo.shape[:2]
+            composite_width = composite_image.shape[1]
+            aspect_ratio = logo_width / logo_height
+            new_logo_height = int(composite_width / aspect_ratio)
+            resized_logo = cv2.resize(logo, (composite_width, new_logo_height))
+            
+            # Convert both images to float for blending calculation
+            logo_float = resized_logo.astype(float)
+            
+            # Create a red background of the same dimensions as the logo
+            background = np.zeros_like(logo_float)
+            # Set red channel (2 in BGR format) to full intensity
+            background[:,:,2] = 255.0
+            
+            # Apply the screen blend formula: result = 255 - ((255 - background) * (255 - foreground) / 255)
+            blended_logo = 255 - ((255 - background) * (255 - logo_float) / 255)
+            blended_logo = blended_logo.astype(np.uint8)
+            
+            # Stack the blended logo below the composite image
+            composite_image = np.vstack((composite_image, blended_logo))
+        else:
+            logger.warning("⚠️ No logo available for the composite image.")
+
+        
+        # add a red margin to the composite image
+        composite_image = cv2.copyMakeBorder(composite_image, 10, 10, 10, 10,
+                                             cv2.BORDER_CONSTANT, value=(0, 0, 255))
+   
+    else:
+        studs_image = studs_results.get("annotated_image")
+        # resize the studs image to the same width as the base image
+
+         # Stack the logo at the bottom of the composite image using Photoshop "screen" blend mode
+        if logo is not None:
+            # Resize logo to match the width of the composite image
+            logo_height, logo_width = logo.shape[:2]
+            composite_width = composite_image.shape[1]
+            aspect_ratio = logo_width / logo_height
+            new_logo_height = int(composite_width / aspect_ratio)
+            resized_logo = cv2.resize(logo, (composite_width, new_logo_height))
+            
+            # Convert both images to float for blending calculation
+            logo_float = resized_logo.astype(float)
+            
+            # Create a black background of the same dimensions as the logo
+            background = np.zeros_like(logo_float)
+            
+            # Apply the screen blend formula: result = 255 - ((255 - background) * (255 - foreground) / 255)
+            blended_logo = 255 - ((255 - background) * (255 - logo_float) / 255)
+            blended_logo = blended_logo.astype(np.uint8)
+            
+            # Stack the blended logo below the composite image
+            composite_image = np.vstack((composite_image, blended_logo))
+        else:
+            logger.warning("⚠️ No logo available for the composite image.")
+
+
+        # add a red margin to the composite image
+        composite_image = cv2.copyMakeBorder(composite_image, 10, 10, 10, 10,
+                                             cv2.BORDER_CONSTANT, value=(0, 0, 255))
     
+    if save_annotated:
+        annotated_path = os.path.join(output_folder, "fullyScannedImage.jpg")
+        cv2.imwrite(annotated_path, composite_image)
+        logger.info("💾 Annotated image saved at: %s", annotated_path)
+
+    return {
+        "brick_results": brick_results,
+        "studs_results": studs_results,
+        "composite_image": composite_image
+    }
+
+
+
     
 
     
