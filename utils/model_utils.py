@@ -36,6 +36,19 @@ import cv2
 import piexif
 from PIL import Image, ImageDraw, ImageFont, ExifTags
 from ultralytics import YOLO
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.progress import Progress, track, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.status import Status
+from rich.text import Text
+from rich.style import Style
+from rich.layout import Layout
+
+
+
 
 # Import project modules - will gracefully handle if rich_utils is not available
 try:

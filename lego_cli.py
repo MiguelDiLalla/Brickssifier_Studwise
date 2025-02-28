@@ -20,6 +20,18 @@ import glob
 import json
 from datetime import datetime
 from pathlib import Path
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.progress import Progress, track, SpinnerColumn, TextColumn
+from rich.status import Status
+from rich.text import Text
+from rich.style import Style
+from rich.layout import Layout
+from rich.progress import *
+
 
 # Try importing rich for enhanced console output
 try:

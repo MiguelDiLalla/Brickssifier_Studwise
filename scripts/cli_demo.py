@@ -17,6 +17,18 @@ import os
 import sys
 import subprocess
 import time
+import rich
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.progress import Progress, track, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.status import Status
+from rich.text import Text
+from rich.style import Style
+from rich.layout import Layout
+
 
 # Add project root to PATH if needed
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

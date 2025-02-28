@@ -484,7 +484,7 @@ def augment_data(dataset_path, augmentations=2):
 
             aug_img_name = img_file.replace(".jpg", f"_aug{i}.jpg")
             aug_img_path = os.path.join(train_images_path, aug_img_name)
-            cv2.imwrite(aug_img_path, cvv2.cvtColor(augmented, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(aug_img_path, cv2.cvtColor(augmented, cv2.COLOR_RGB2BGR))
 
             aug_label_name = label_path.replace(".txt", f"_aug{i}.txt")
             shutil.copy(label_path, aug_label_name)
@@ -692,7 +692,7 @@ def display_last_training_session(session_dir):
         elif file.lower().endswith(".yaml"):
             logging.info(f"📄 Displaying YAML file: {file}")
             try:
-                with open(file_path, 'r') as f:
+                with open(file_path, 'r') as f):
                     content = yaml.safe_load(f)
                 pprint(content)
             except Exception as e:
@@ -702,4 +702,3 @@ def display_last_training_session(session_dir):
             logging.info(f"📄 Skipping unsupported file type: {file}")
 
     logging.info("✅ Done displaying training session contents.")
-``` 
