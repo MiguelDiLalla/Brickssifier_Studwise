@@ -380,7 +380,7 @@ def infer_cmd(image, output, save_annotated, force_run):
                     img_path,
                     save_annotated=save_annotated,
                     output_folder=img_output,
-                    force_ran=force_run
+                    force_rerun=force_run
                 )
                 
                 progress.update(task, advance=60)
@@ -391,7 +391,7 @@ def infer_cmd(image, output, save_annotated, force_run):
                 img_path,
                 save_annotated=save_annotated,
                 output_folder=img_output,
-                force_ran=force_run
+                force_rerun=force_run
             )
         
         # Check results

@@ -664,7 +664,7 @@ def clean_exif_metadata(image_path):
 # Brick Detection Function
 # =============================================================================
 
-def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder="", use_progress=True):
+def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder="", use_progress=True, force_rerun=False):
     """
     Performs brick detection using the provided YOLO model with rich progress display.
     
@@ -676,6 +676,7 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
         save_annotated (bool): If True, saves annotated image
         output_folder (str): Directory to save outputs to
         use_progress (bool): Whether to use progress display
+        force_rerun (bool): If True, forces re-running detection even if cached results exist
         
     Returns:
         dict: Dictionary containing:
@@ -689,9 +690,27 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
         - Uses either provided model or loads default from config
         - Shows real-time progress with rich display if available
         - Saves outputs based on specified flags
+        - Can retrieve cached results from EXIF if available and force_rerun is False
     """
     # Define results at the beginning to ensure it exists
     results = None
+    
+    # Check for cached detection if image_input is a file path and not forcing rerun
+    if isinstance(image_input, str) and not force_rerun:
+        cached_results = read_detection(image_input)
+        if cached_results and cached_results.get("status") == "success":
+            if "mode" in cached_results.get("metadata", {}) and cached_results["metadata"]["mode"] == "brick":
+                logger.info("📋 Using cached brick detection results from EXIF metadata.")
+                
+                # Return cached results but still save outputs if requested
+                if output_folder and save_annotated:
+                    annotated_image = cached_results.get("annotated_image")
+                    annotated_path = os.path.join(output_folder, "cached_brick_detection.jpg")
+                    os.makedirs(output_folder, exist_ok=True)
+                    cv2.imwrite(annotated_path, annotated_image)
+                    logger.info("💾 Cached annotated image saved at: %s", annotated_path)
+                    
+                return cached_results
     
     with console.status("[bold green]Loading image and model...") as status:
         # Load model if not provided
@@ -732,6 +751,8 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
             progress.update(detection_task, advance=50)
             
             metadata = extract_metadata_from_yolo_result(results, image_input)
+            # Set the mode explicitly to "brick" to distinguish the detection type
+            metadata["mode"] = "brick"
             boxes_np = results[0].boxes.xyxy.cpu().numpy() if results and len(results) > 0 and results[0].boxes.xyxy is not None else np.array([])
             annotated_image = results[0].plot(labels=True) if boxes_np.size > 0 else image.copy()
             
@@ -763,6 +784,8 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
         # Run detection without progress display
         results = model.predict(source=image, conf=conf)
         metadata = extract_metadata_from_yolo_result(results, image_input)
+        # Set the mode explicitly to "brick" to distinguish the detection type
+        metadata["mode"] = "brick"
         boxes_np = results[0].boxes.xyxy.cpu().numpy() if results and len(results) > 0 and results[0].boxes.xyxy is not None else np.array([])
         annotated_image = results[0].plot(labels=True) if boxes_np.size > 0 else image.copy()
         
@@ -800,12 +823,24 @@ def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_anno
         
         console.print(Panel(table, title="[bold]Detection Complete[/]", border_style="green"))
     
+    try:
+        if isinstance(image_input, str):
+            # Always update EXIF for the original image file
+            write_exif(image_input, metadata)
+        
+        # Additionally update EXIF for annotated images if we're saving them
+        if save_annotated and metadata.get("annotated_image_path"):
+            write_exif(metadata["annotated_image_path"], metadata)
+    except Exception as e:
+        logger.error(f"❌ Failed to write EXIF metadata: {e}")
+        
     return {
         "orig_image": image,
         "annotated_image": annotated_image,
         "cropped_detections": cropped_detections,
         "metadata": metadata,
-        "boxes": boxes_np
+        "boxes": boxes_np,
+        "status": "success"  # Add status for consistency with read_detection
     }
 
 # =============================================================================
@@ -896,7 +931,7 @@ def classify_dimensions(results, orig_image, dimension_map=config["STUDS_TO_DIME
             "annotated_image": annotated_image
         }
 
-def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, output_folder=""):
+def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, output_folder="", force_rerun=False):
     """
     Detects studs on LEGO bricks and classifies dimensions.
     
@@ -906,6 +941,7 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
         conf (float): Confidence threshold for detections (0.0-1.0)
         save_annotated (bool): If True, saves annotated image
         output_folder (str): Directory to save outputs to
+        force_rerun (bool): If True, forces re-running detection even if cached results exist
         
     Returns:
         dict: Dictionary containing:
@@ -913,9 +949,10 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
             - annotated_image: Image with annotations
             - dimension: Classified brick dimension (e.g., "2x4")
             - metadata: Complete metadata dictionary
+            - status: Processing status
             
     Notes:
-        - Can retrieve cached results from EXIF if available
+        - Can retrieve cached results from EXIF if available and force_rerun is False
         - Integrates with classify_dimensions for dimension determination
         - Saves metadata to image EXIF data for future reference
     """
@@ -923,20 +960,23 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
     if not output_folder:
         logger.warning("⚠️ No output folder provided. Results will not be saved.")
     
-    # New: If image_input is a file path, try to retrieve cached detection from EXIF metadata
-    if isinstance(image_input, str):
-        image = cv2.imread(image_input)
+    # Check for cached detection if image_input is a file path and not forcing rerun
+    detection_results = None
+    if isinstance(image_input, str) and not force_rerun:
         detection_results = read_detection(image_input)
         if detection_results and detection_results.get("status") == "success":
-            logger.info("Retrieving cached detection results from EXIF for studs detection.")
-
-            # if save_annotated:
-            #     annotated_image = detection_results.get("annotated_image")
-            #     annotated_path = os.path.join(output_folder, "annotated_image.jpg")
-            #     cv2.imwrite(annotated_path, annotated_image)
-            #     logger.info("💾 Annotated image saved at: %s", annotated_path)
-            #     detection_results["metadata"]["annotated_image_path"] = annotated_path
-            # return detection_results
+            if "mode" in detection_results.get("metadata", {}) and detection_results["metadata"]["mode"] == "stud":
+                logger.info("📋 Using cached stud detection results from EXIF metadata.")
+                
+                # Return cached results but still save outputs if requested
+                if output_folder and save_annotated:
+                    annotated_image = detection_results.get("annotated_image")
+                    annotated_path = os.path.join(output_folder, "cached_stud_detection.jpg")
+                    os.makedirs(output_folder, exist_ok=True)
+                    cv2.imwrite(annotated_path, annotated_image)
+                    logger.info("💾 Cached annotated image saved at: %s", annotated_path)
+                    
+                return detection_results
 
     if model is None:
         model = config.get("LOADED_MODELS", {}).get("studs")
@@ -951,65 +991,50 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
             return None
     else:
         image = image_input
-        detection_results = None
-    
-    # print(f"[DEBUG] {detection_results.get('dimension', 'Not Found')}")
 
-    cached_scan_flag = False if detection_results and detection_results.get("status") == "success" else True
+    try:
+        orig_image = image.copy()
+        annotated_image = image.copy()
+        results = model.predict(source=image, conf=conf)
+        if isinstance(image_input, str):
+            results[0].path = image_input
+        boxes_np = (results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([]))
+        if boxes_np.size == 0:
+            logger.warning("⚠️ No detections found.")
+            return {
+                "orig_image": orig_image,
+                "annotated_image": annotated_image,
+                "dimension": "No studs detected",
+                "metadata": {},
+                "status": "no_detections"
+            }
 
-    if cached_scan_flag:
-        try:
-            orig_image = image.copy()
-            annotated_image = image.copy()
-            results = model.predict(source=image, conf=conf)
-            if isinstance(image_input, str):
-                results[0].path = image_input
-            boxes_np = (results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([]))
-            if boxes_np.size == 0:
-                logger.warning("⚠️ No detections found.")
-                return 
+        annotated_image = results[0].plot(labels=False)
 
-            annotated_image = results[0].plot(labels=False)
-
-            # Classify dimensions based on detected studs
-            dimension_info = classify_dimensions(results, orig_image)
-            dimension_result = dimension_info.get("dimension", "ERROR CATASTROFICO")
-            print(f"[DEBUG] {dimension_result}")
-            annotated_image = dimension_info.get("annotated_image", annotated_image)
-            metadata = extract_metadata_from_yolo_result(results, orig_image)
-            
-
-    
-        except Exception as e:
-            logger.error("❌ Error during studs detection: %s", e)
-            return None
-    else:  
-
-        dimension_result = detection_results.get("metadata", {}).get("dimension", "Not Found")
-        annotated_image = detection_results.get("annotated_image", image)
-        orig_image = detection_results.get("orig_image", image)
-        metadata = detection_results.get("metadata", {})
-
-
-    # Process dimension classification results and save annotated image if requested
-    if isinstance(dimension_result, dict):
-        # Extract dimension and use the provided annotated image with regression line
-        metadata["dimension"] = dimension_result.get("dimension", "Error")
-        annotated_image = dimension_result.get("annotated_image", annotated_image)
-    elif isinstance(dimension_result, str):
-        # String result means either a direct dimension or error message
+        # Classify dimensions based on detected studs
+        dimension_info = classify_dimensions(results, orig_image)
+        dimension_result = dimension_info.get("dimension", "Unknown")
+        annotated_image = dimension_info.get("annotated_image", annotated_image)
+        metadata = extract_metadata_from_yolo_result(results, orig_image)
+        # Set the mode explicitly to "stud" to distinguish the detection type
+        metadata["mode"] = "stud"
         metadata["dimension"] = dimension_result
+        
+    except Exception as e:
+        logger.error("❌ Error during studs detection: %s", e)
+        return None
 
+    # Create output folder if not provided
     if not output_folder:
         output_folder = os.path.join(os.getcwd(), "results", "studs")
         os.makedirs(output_folder, exist_ok=True)   
 
-    if isinstance(image_input, str) and cached_scan_flag:
-        write_exif(image_input, metadata)
-    elif save_annotated and metadata.get("annotated_image_path"):
-        write_exif(metadata["annotated_image_path"], metadata)
-        
-
+    try:
+        if isinstance(image_input, str):
+            # Always update EXIF for the original image file
+            write_exif(image_input, metadata)
+    except Exception as e:
+        logger.error(f"❌ Failed to write EXIF metadata: {e}")
     
     # Save annotated image if requested
     if save_annotated:
@@ -1018,16 +1043,22 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
         cv2.imwrite(annotated_path, annotated_image)
         metadata["annotated_image_path"] = annotated_path
         logger.info("💾 Annotated image saved at: %s", annotated_path)
-    
+        
+        # Also write EXIF to annotated image if we saved it
+        try:
+            write_exif(annotated_path, metadata)
+        except Exception as e:
+            logger.error(f"❌ Failed to write EXIF metadata to annotated image: {e}")
 
     return {
         "orig_image": orig_image,
         "annotated_image": annotated_image,
-        "dimension": metadata.get("dimension", "Error"),
-        "metadata": metadata
+        "dimension": metadata.get("dimension", "Unknown"),
+        "metadata": metadata,
+        "status": "success"
     }
 
-def run_full_algorithm(image_path, save_annotated=False, output_folder="", force_ran=False, logo=config["LOGO_NUMPY"], external_progress=None):
+def run_full_algorithm(image_path, save_annotated=False, output_folder="", force_rerun=False, logo=config["LOGO_NUMPY"], external_progress=None):
     """
     Runs the full inference pipeline: brick detection, stud detection, and classification.
     
@@ -1035,7 +1066,7 @@ def run_full_algorithm(image_path, save_annotated=False, output_folder="", force
         image_path (str): Path to the image file to process
         save_annotated (bool): Whether to save annotated images to disk
         output_folder (str): Path to save results (created if not exists)
-        force_ran (bool): Force re-running detection even if cached results exist
+        force_rerun (bool): Force re-running detection even if cached results exist
         logo (np.ndarray, optional): Logo image to add to the bottom of output
         external_progress: Optional external progress context from CLI
         
@@ -1050,12 +1081,18 @@ def run_full_algorithm(image_path, save_annotated=False, output_folder="", force
         - Processes each detected brick independently for stud detection
         - Handles cases with multiple bricks in a single image
         - Supports external progress tracking for CLI integration
+        - Can use cached results if force_rerun is False
     """
     # handle empty output folder
     if output_folder == "" and save_annotated:
         output_folder = os.path.join(os.getcwd(), "tests", "test_results")
         os.makedirs(output_folder, exist_ok=True)
         logger.info("📂 Output folder not provided. Saving results in: %s", output_folder)
+
+    # If force_rerun is True, clean existing EXIF metadata
+    if force_rerun:
+        logger.info("🔄 Force rerun requested. Cleaning existing EXIF metadata.")
+        clean_exif_metadata(image_path)
 
     # Load the image
     image = cv2.imread(image_path)
@@ -1067,15 +1104,22 @@ def run_full_algorithm(image_path, save_annotated=False, output_folder="", force
     if external_progress:
         # Use the provided progress context
         brick_results = detect_bricks(
-            image, 
+            image_path,  # Use path for caching support
             save_annotated=False, 
             save_json=False, 
             output_folder=output_folder,
-            use_progress=False  # Don't create a new progress bar
+            use_progress=False,  # Don't create a new progress bar
+            force_rerun=force_rerun  # Pass force_rerun parameter
         )
     else:
         # Create our own progress context
-        brick_results = detect_bricks(image, save_annotated=False, save_json=False, output_folder=output_folder)
+        brick_results = detect_bricks(
+            image_path,  # Use path for caching support
+            save_annotated=False, 
+            save_json=False, 
+            output_folder=output_folder,
+            force_rerun=force_rerun  # Pass force_rerun parameter
+        )
 
     if brick_results is None:
         logger.error("❌ Error during brick detection.")
@@ -1090,7 +1134,8 @@ def run_full_algorithm(image_path, save_annotated=False, output_folder="", force
     if len(cropped_detections) > 1:
         for idx, crop in enumerate(cropped_detections):
             logger.info(f"🔍 Running studs detection on cropped detection number {idx + 1}.")
-            studs_result = detect_studs(crop, save_annotated=False)
+            # Use numpy arrays directly for crops (no caching)
+            studs_result = detect_studs(crop, save_annotated=False, force_rerun=True)
             if studs_result is None:
                 logger.error(f"❌ No studs detected in cropped detection number {idx + 1}.")
                 continue
@@ -1098,14 +1143,15 @@ def run_full_algorithm(image_path, save_annotated=False, output_folder="", force
             
     elif len(cropped_detections) == 1:
         logger.info(f"🔍 Running studs detection on single cropped detection.")
-        studs_result = detect_studs(cropped_detections[0], save_annotated=False)
+        # Use numpy array directly for the crop (no caching)
+        studs_result = detect_studs(cropped_detections[0], save_annotated=False, force_rerun=True)
         if studs_result is None:
             logger.error("❌ No studs detected in the single cropped detection.")
             return None
         studs_results = [studs_result]
     else:
         logger.warning("⚠️ No brick detected. Running studs detection on the original image.")
-        studs_result = detect_studs(image_path, save_annotated=False)
+        studs_result = detect_studs(image_path, save_annotated=False, force_rerun=force_rerun)
         if studs_result is None:
             logger.error("❌ No studs detected in the original image.")
             return None
