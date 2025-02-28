@@ -1,3 +1,18 @@
+"""
+Data Utilities for LEGO Bricks ML Vision
+
+This module provides dataset processing utilities for preparing, converting,
+and visualizing annotated image data for the LEGO Bricks ML Vision project.
+
+Key features:
+  - Conversion between annotation formats (LabelMe to YOLO)
+  - Keypoint conversion to bounding boxes
+  - Dataset visualization tools
+  - Structured logging with error handling
+
+Author: Miguel DiLalla
+"""
+
 import os
 import json
 import argparse
@@ -6,17 +21,41 @@ import numpy as np
 import matplotlib.pyplot as plt
 import logging
 import math
+import random
+
+# =============================================================================
+# Logging Setup
+# =============================================================================
 
 def setup_logging():
+    """
+    Configures structured logging for data processing operations.
+    
+    Sets up a StreamHandler with formatted output for clear progress tracking.
+    """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler()]
     )
 
+# =============================================================================
+# Format Conversion Functions
+# =============================================================================
+
 def convert_labelme_to_yolo(args):
     """
-    Convert LabelMe JSON annotations to YOLO format, ensuring proper cache integration.
+    Convert LabelMe JSON annotations to YOLO format for model training.
+    
+    Args:
+        args: Command-line arguments containing:
+            - input: Path to folder with LabelMe JSON files
+            
+    Notes:
+        - Processes all JSON files in the input folder
+        - Extracts bounding box coordinates and normalizes them
+        - Creates corresponding YOLO format .txt files
+        - Saves processed files to cache for reproducibility
     """
     input_folder = args.input
     cache_dir = "cache/datasets/processed/YOLO_labels"
@@ -28,7 +67,7 @@ def convert_labelme_to_yolo(args):
     logging.info(f"Saving YOLO annotations to: {output_folder}")
 
     for json_file in os.listdir(input_folder):
-        if json_file.endswith('.json'):
+        if (json_file.endswith('.json')):
             json_path = os.path.join(input_folder, json_file)
             try:
                 with open(json_path, 'r') as f:
@@ -70,7 +109,17 @@ def convert_labelme_to_yolo(args):
 
 def convert_keypoints_to_bboxes(args):
     """
-    Convert keypoints from LabelMe JSON into bounding boxes and save in processed cache.
+    Convert keypoints from LabelMe JSON into bounding boxes.
+    
+    Args:
+        args: Command-line arguments containing:
+            - input: Path to folder with keypoint JSON files
+            - area_ratio: Total area ratio for bounding boxes (default: 0.4)
+            
+    Notes:
+        - Used for converting stud point annotations to rectangular areas
+        - Calculates appropriate box size based on image dimensions and stud count
+        - Preserves original image metadata while replacing annotations
     """
     input_folder = args.input
     cache_dir = "cache/datasets/processed/bboxes"
@@ -132,9 +181,24 @@ def convert_keypoints_to_bboxes(args):
     
     logging.info("Keypoints to bounding boxes conversion completed.")
 
+# =============================================================================
+# Visualization Functions
+# =============================================================================
+
 def visualize_yolo_annotation(args):
     """
-    Display YOLO annotations on images.
+    Displays YOLO annotations overlaid on corresponding images.
+    
+    Args:
+        args: Command-line arguments containing:
+            - input: Path to image file or folder
+            - labels: Path to folder containing YOLO .txt labels
+            - grid_size: Visualization grid dimensions (e.g., "3x4")
+            
+    Notes:
+        - Creates a grid display of randomly selected images (if folder provided)
+        - Draws bounding boxes based on YOLO coordinates
+        - Useful for validating dataset annotations before training
     """
     image_path_or_folder = args.input
     labels_folder = args.labels
@@ -185,7 +249,19 @@ def visualize_yolo_annotation(args):
     plt.show()
     logging.info("YOLO annotations visualization completed.")
 
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
 def main():
+    """
+    Command-line interface for data processing utilities.
+    
+    Provides subcommands for:
+    - labelme-to-yolo: Convert LabelMe JSON to YOLO format
+    - keypoints-to-bboxes: Convert keypoint annotations to bounding boxes
+    - visualize: Display annotated images with bounding boxes
+    """
     parser = argparse.ArgumentParser(description="Data Utilities for LEGO ML Project")
     subparsers = parser.add_subparsers(dest="command")
 

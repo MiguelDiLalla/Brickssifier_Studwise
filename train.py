@@ -1,3 +1,26 @@
+"""
+LEGO Bricks ML Vision - Training Pipeline
+
+This module provides a complete ML training pipeline for LEGO Bricks and Studs detection
+models using YOLOv8. It handles dataset preparation, training configuration, model training
+and results management.
+
+Key features:
+  - Automatic hardware detection (CUDA/MPS/CPU)
+  - Dataset extraction and validation 
+  - Train/validation/test dataset splitting
+  - Data augmentation via Albumentations
+  - Model selection and training
+  - Results compression and sharing
+  - Detailed logging with emoji markers
+
+Usage examples:
+  - Use CLI interface: python lego_cli.py train --mode bricks
+  - Direct API: from train import train_model, setup_logging
+
+Author: Miguel DiLalla
+"""
+
 import os
 import logging
 import torch
@@ -5,9 +28,9 @@ import shutil
 import zipfile
 import json
 import random
-import argparse
-from datetime import datetime
+import datetime
 import subprocess
+import numpy as np
 import cv2
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
@@ -18,10 +41,12 @@ from IPython.display import FileLink, display
 from pprint import pprint
 import pandas as pd
 
-
-#all imports
+# =============================================================================
+# Logging Setup
+# =============================================================================
 
 class EmojiFormatter(logging.Formatter):
+    """Custom formatter that adds emoji markers to log messages based on level."""
     def format(self, record):
         base_msg = super().format(record)
         if record.levelno >= logging.ERROR:
@@ -35,7 +60,12 @@ class EmojiFormatter(logging.Formatter):
         return f"{base_msg} {emoji}"
 
 def setup_logging():
-    """Configures logging for train.py execution."""
+    """
+    Configures structured logging for train.py with emoji markers.
+    
+    Sets up both console and file handlers with consistent formatting.
+    Creates 'logs' directory if it doesn't exist.
+    """
     log_dir = "logs"
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "train_session.log")
@@ -57,28 +87,23 @@ def setup_logging():
         level=logging.INFO,
         handlers=[stream_handler, file_handler]
     )
-
-def cleanup_after_training():
-    """
-    Cleans up temporary directories:
-      - cache/
-      - logs/
-      - results/
-    """
-    repo_root = get_repo_root()
-    folders = ["cache", "results"]
-    for folder in folders:
-        folder_path = os.path.join(repo_root, folder)
-        if os.path.exists(folder_path):
-            shutil.rmtree(folder_path)
-            logging.info(f"✅ Removed: {folder_path}")
-        else:
-            logging.warning(f"❌ Not found: {folder_path}")
     
+    logging.info("Logging initialized for training pipeline")
+
+# =============================================================================
+# Environment Setup
+# =============================================================================
 
 def get_repo_root() -> Path:
     """
-    Auto-detects the repository root directory. If inside a nested execution, returns the correct working directory.
+    Auto-detects the repository root directory.
+    
+    Returns:
+        Path: The repository root directory path.
+        
+    Notes:
+        - Searches for .git directory moving up from current location
+        - Falls back to current working directory if not found
     """
     current_dir = Path(__file__).resolve().parent
     while current_dir != current_dir.parent:  # Avoid infinite loops
@@ -92,6 +117,14 @@ def get_repo_root() -> Path:
 def detect_hardware():
     """
     Detects available hardware for training.
+    
+    Returns:
+        str: Device specification for PyTorch (e.g., "0,1" for multiple GPUs, "cpu", or "mps")
+        
+    Notes:
+        - Checks for CUDA-capable GPUs and returns all available devices
+        - Falls back to Apple MPS if available
+        - Defaults to CPU with warning if no accelerators found
     """
     if torch.cuda.is_available():
         num_gpus = torch.cuda.device_count()
@@ -106,10 +139,66 @@ def detect_hardware():
     logging.warning("No GPU or MPS device detected. Falling back to CPU.")
     return "cpu"
 
+def setup_execution_structure():
+    """
+    Ensures all necessary cache directories exist before execution.
+    
+    Creates standardized folder structure for:
+      - Cache (datasets, models, logs)
+      - Results
+      
+    Returns:
+        None
+    """
+    repo_root = get_repo_root()
+    required_dirs = [
+        repo_root / "cache" / "datasets",
+        repo_root / "cache" / "models",
+        repo_root / "cache" / "logs",
+        repo_root / "results"  # ✅ FIXED: Ensuring results go to the right place
+    ]
+    for directory in required_dirs:
+        directory.mkdir(parents=True, exist_ok=True)
+    logging.info("✅ Execution structure initialized.")
+
+def cleanup_after_training():
+    """
+    Cleans up temporary directories after training completion.
+    
+    Removes:
+      - cache/
+      - results/
+      
+    Returns:
+        None
+      
+    Notes:
+        - Preserves original dataset files
+        - Logs successful and failed cleanup operations
+    """
+    repo_root = get_repo_root()
+    folders = ["cache", "results"]
+    for folder in folders:
+        folder_path = os.path.join(repo_root, folder)
+        if os.path.exists(folder_path):
+            shutil.rmtree(folder_path)
+            logging.info(f"✅ Removed: {folder_path}")
+        else:
+            logging.warning(f"❌ Not found: {folder_path}")
 
 def export_logs(log_name="train_session"):
     """
     Exports logs and hardware details in JSON format.
+    
+    Args:
+        log_name (str): Base name for the log file (without extension)
+        
+    Returns:
+        str: Path to the exported JSON file
+        
+    Notes:
+        - Includes hardware details (GPU, CUDA version, etc.)
+        - Preserves all log entries in structured format
     """
     log_path = os.path.join("logs", f"{log_name}.log")
     export_path = log_path.replace(".log", ".json")
@@ -120,7 +209,7 @@ def export_logs(log_name="train_session"):
         "device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
         "num_gpus": torch.cuda.device_count(),
         "torch_version": torch.__version__,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.datetime.now().isoformat()
     }
     
     with open(log_path, "r") as f:
@@ -137,22 +226,9 @@ def export_logs(log_name="train_session"):
     logging.info(f"✅ Logs exported to {export_path}")
     return export_path
 
-def setup_execution_structure():
-    """
-    Ensures all necessary cache directories are created before execution.
-    """
-    repo_root = get_repo_root()
-    required_dirs = [
-        repo_root / "cache" / "datasets",
-        repo_root / "cache" / "models",
-        repo_root / "cache" / "logs",
-        repo_root / "results"  # ✅ FIXED: Ensuring results go to the right place
-    ]
-    for directory in required_dirs:
-        directory.mkdir(parents=True, exist_ok=True)
-    logging.info("✅ Execution structure initialized.")
-
-# Dataset download function
+# =============================================================================
+# Dataset Preparation
+# =============================================================================
 
 def unzip_dataset(mode, force_extract=False):
     """
@@ -161,6 +237,13 @@ def unzip_dataset(mode, force_extract=False):
     Args:
         mode (str): 'bricks' or 'studs'.
         force_extract (bool): If True, forces re-extraction even if dataset exists.
+        
+    Returns:
+        str: Path to the extracted dataset
+        
+    Notes:
+        - Checks if dataset was previously extracted to avoid redundant work
+        - Creates necessary directories automatically
     """
     repo_root = get_repo_root()
     dataset_compressed_dir = os.path.join(repo_root, "presentation/Datasets_Compress")
@@ -182,8 +265,6 @@ def unzip_dataset(mode, force_extract=False):
 
     return extract_path
 
-# Dataset validation function
-
 def validate_dataset(mode):
     """
     Validates dataset integrity by dynamically detecting the images and labels folders,
@@ -191,6 +272,18 @@ def validate_dataset(mode):
 
     Args:
         mode (str): 'bricks' or 'studs', defining dataset location.
+        
+    Returns:
+        None
+        
+    Raises:
+        FileNotFoundError: If image/label folders cannot be identified
+        ValueError: If image-label pairs are mismatched
+        
+    Notes:
+        - Automatically detects folder structure
+        - Standardizes folder names to "images" and "labels"
+        - Validates 1:1 mapping between images and labels
     """
     repo_root = get_repo_root()
     dataset_path = os.path.join(repo_root, "cache/datasets", mode)
@@ -242,10 +335,19 @@ def validate_dataset(mode):
 
     logging.info(f"✅ Dataset validation successful for mode: {mode}")
 
-# create dataset folder tree structure
 def create_dataset_structure(mode):
     """
     Creates necessary dataset directories for YOLO.
+    
+    Args:
+        mode (str): 'bricks' or 'studs', defining dataset name
+        
+    Returns:
+        Path: Path to the created dataset structure root
+        
+    Notes:
+        - Creates standard YOLO folder structure with train/val/test splits
+        - Separate directories for images and labels
     """
     repo_root = get_repo_root()
     output_dir = repo_root / "cache" / "datasets" / f"{mode}_yolo"
@@ -263,37 +365,20 @@ def create_dataset_structure(mode):
     logging.info(f"✅ Dataset structure created at {output_dir}")
     return output_dir
 
-    # Helper function to move files
-    def move_files(files, img_dst, lbl_dst):
-        for f in files:
-            shutil.copy(os.path.join(images_path, f), os.path.join(output_dir, img_dst, f))
-            shutil.copy(os.path.join(labels_path, f.replace(".jpg", ".txt")), os.path.join(output_dir, lbl_dst, f.replace(".jpg", ".txt")))
-
-    # Move files
-    move_files(train_files, "dataset/images/train", "dataset/labels/train")
-    move_files(val_files, "dataset/images/val", "dataset/labels/val")
-    move_files(test_files, "dataset/images/test", "dataset/labels/test")
-
-    # Create dataset.yaml
-    dataset_yaml = {
-        "path": output_dir,
-        "train": "dataset/images/train",
-        "val": "dataset/images/val",
-        "test": "dataset/images/test",
-        "nc": 1,
-        "names": ["lego_brick"] if mode == "bricks" else ["lego_stud"]
-    }
-    
-    with open(os.path.join(output_dir, "dataset.yaml"), "w") as f:
-        yaml.dump(dataset_yaml, f, default_flow_style=False)
-
-    logging.info(f"✅ Dataset structure created at {output_dir}")
-    return output_dir
-
-#splitting the dataset
 def split_dataset(mode):
     """
     Splits dataset into train (70%), val (20%), test (10%) and updates dataset.yaml.
+    
+    Args:
+        mode (str): 'bricks' or 'studs', defining dataset to split
+        
+    Returns:
+        str: Path to the YOLO dataset directory
+        
+    Notes:
+        - Randomizes file order before splitting
+        - Copies (not moves) files to preserve original dataset
+        - Creates YOLO-compatible dataset.yaml configuration
     """
     repo_root = get_repo_root()
     dataset_path = os.path.join(repo_root, "cache/datasets", mode)
@@ -347,7 +432,6 @@ def split_dataset(mode):
     logging.info(f"✅ Dataset split completed. Updated dataset.yaml at {output_dir}")
     return output_dir
 
-#augmenting the dataset
 def augment_data(dataset_path, augmentations=2):
     """
     Augments training dataset using Albumentations.
@@ -355,6 +439,14 @@ def augment_data(dataset_path, augmentations=2):
     Args:
         dataset_path (str): Path to YOLO dataset.
         augmentations (int): Number of augmentations per image.
+        
+    Returns:
+        None
+        
+    Notes:
+        - Creates multiple variations of each training image
+        - Preserves label information for each augmented image
+        - Uses a robust set of transforms: flips, rotations, color adjustments
     """
     train_images_path = os.path.join(dataset_path, "dataset/images/train")
     train_labels_path = os.path.join(dataset_path, "dataset/labels/train")
@@ -392,14 +484,17 @@ def augment_data(dataset_path, augmentations=2):
 
             aug_img_name = img_file.replace(".jpg", f"_aug{i}.jpg")
             aug_img_path = os.path.join(train_images_path, aug_img_name)
-            cv2.imwrite(aug_img_path, cv2.cvtColor(augmented, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(aug_img_path, cvv2.cvtColor(augmented, cv2.COLOR_RGB2BGR))
 
             aug_label_name = label_path.replace(".txt", f"_aug{i}.txt")
             shutil.copy(label_path, aug_label_name)
 
     logging.info(f"✅ Data augmentation completed with {augmentations} augmentations per image.")
 
-# slecting the model to train
+# =============================================================================
+# Training Functions
+# =============================================================================
+
 def select_model(mode, use_pretrained=False):
     """
     Selects a pre-trained model from the repository or defaults to YOLOv8n.
@@ -410,6 +505,12 @@ def select_model(mode, use_pretrained=False):
 
     Returns:
         str: Path to the selected model checkpoint.
+        
+    Raises:
+        FileNotFoundError: If requested model file is not found
+        
+    Notes:
+        - Falls back to YOLOv8n if use_pretrained is False
     """
     repo_root = get_repo_root()
     
@@ -428,11 +529,17 @@ def select_model(mode, use_pretrained=False):
         logging.error(f"❌ Model not found at {model_path}")
         raise FileNotFoundError(f"Required model file is missing: {model_path}")
 
-# Training the model
-
 def save_model(model, output_dir, model_name="trained_model.pt"):
     """
     Saves the trained model to the specified directory.
+    
+    Args:
+        model: YOLO model object to save
+        output_dir (str): Directory to save the model
+        model_name (str): Filename for the saved model
+        
+    Returns:
+        str: Full path to the saved model file
     """
     model_save_path = os.path.join(output_dir, model_name)
     model.save(model_save_path)
@@ -442,11 +549,26 @@ def save_model(model, output_dir, model_name="trained_model.pt"):
 def train_model(dataset_path, model_path, device, epochs, batch_size):
     """
     Trains the YOLOv8 model and displays its dynamic training progress bar.
+    
+    Args:
+        dataset_path (str): Path to the dataset directory
+        model_path (str): Path to the model file or pre-trained model name
+        device (str): Training device specification (e.g., "0" or "cpu")
+        epochs (int): Number of training epochs
+        batch_size (int): Batch size for training
+        
+    Returns:
+        str: Path to the directory containing training results
+        
+    Notes:
+        - Uses YOLO CLI for training to enable progress bar
+        - Results are saved with timestamped directory names
+        - Early stopping with patience=3 to prevent overfitting
     """
     logging.info(f"🚀 Starting training with model: {model_path}")
     
     model = YOLO(model_path)
-    training_name = f"training_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    training_name = f"training_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
     
     repo_root = os.getcwd()
     results_dir = os.path.join(repo_root, "results")
@@ -475,53 +597,24 @@ def train_model(dataset_path, model_path, device, epochs, batch_size):
     logging.info("✅ Training completed.")
     return os.path.join(results_dir, training_name)
 
-# Export logs
-
-def export_logs(log_name="train_session"):
-    """
-    Exports logs in JSON format inside the results directory.
-
-    Args:
-        log_name (str): The base name for the log file (without extension).
-        
-    """
-    log_path = os.path.join("logs", f"{log_name}.log")
-    export_path = log_path.replace(".log", ".json")
-    
-    hardware_info = {
-        "python_version": torch.__version__,
-        "cuda_available": torch.cuda.is_available(),
-        "device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
-        "num_gpus": torch.cuda.device_count(),
-        "torch_version": torch.__version__,
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    with open(log_path, "r") as f:
-        log_entries = [line.strip() for line in f.readlines()]
-    
-    session_data = {
-        "hardware_info": hardware_info,
-        "logs": log_entries
-    }
-    
-    with open(export_path, "w") as f:
-        json.dump(session_data, f, indent=4)
-        
-    
-    logging.info(f"✅ Logs exported to {export_path}")
-    return export_path
+# =============================================================================
+# Results Management
+# =============================================================================
 
 def zip_and_download_results(results_dir=None, output_filename=None):
     """
-    copy the logs folder to the results folder
-    Compresses the entire results directory into a ZIP file outside the CWD 
-    and provides a download link.
+    Compresses the results directory into a ZIP file and provides a download link.
 
     Args:
-        results_dir (str): The path to the results folder.
-        output_filename (str): Name of the output zip file.
-
+        results_dir (str, optional): The path to the results folder.
+        output_filename (str, optional): Name of the output zip file.
+        
+    Returns:
+        None
+        
+    Notes:
+        - Copies logs folder to results before compression
+        - Creates and displays downloadable link in Jupyter environments
     """
     if results_dir is None:
         results_dir = os.path.join(os.getcwd(), "results")
@@ -552,6 +645,13 @@ def display_last_training_session(session_dir):
     
     Args:
         session_dir (str): Path to the training session folder.
+        
+    Returns:
+        None
+        
+    Notes:
+        - Handles various file types with appropriate visualization
+        - Displays images, tables, text files with proper formatting
     """
     if not os.path.exists(session_dir):
         logging.error(f"Results directory not found: {session_dir}")
@@ -602,96 +702,4 @@ def display_last_training_session(session_dir):
             logging.info(f"📄 Skipping unsupported file type: {file}")
 
     logging.info("✅ Done displaying training session contents.")
-
-# Parse command-line arguments
-def parse_args():
-    """
-    Parses command-line arguments for the training pipeline.
-    Returns:
-        argparse.Namespace: Parsed arguments.
-    """
-    parser = argparse.ArgumentParser(description="LEGO ML Training Pipeline")
-    parser.add_argument("--mode", type=str, choices=["bricks", "studs"], required=True, 
-                        help="Training mode: 'bricks' or 'studs'")
-    parser.add_argument("--epochs", type=int, default=20, 
-                        help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=16, 
-                        help="Batch size for training")
-    parser.add_argument("--show-results", dest="show_results", action="store_true",
-                        help="Display results after training")
-    parser.add_argument("--no-show-results", dest="show_results", action="store_false",
-                        help="Do not display results after training")
-    parser.add_argument("--cleanup", dest="cleanup", action="store_true",
-                        help="Remove cached datasets, logs and results after training")
-    parser.add_argument("--no-cleanup", dest="cleanup", action="store_false",
-                        help="Do not remove cached datasets, logs and results after training")
-    parser.add_argument("--force-extract", action="store_true", 
-                        help="Force re-extraction of dataset")
-    parser.add_argument("--use-pretrained", action="store_true", 
-                        help="Use LEGO-trained model instead of YOLOv8n")
-    
-    parser.set_defaults(show_results=True, cleanup=True)
-    return parser.parse_args()
-
-# Main execution
-
-def main():
-    setup_logging()
-    args = parse_args()
-    
-    logging.info("=== LEGO ML Training Pipeline Starting ===")
-    device = detect_hardware()
-    logging.info(f"Using device: {device}")
-    
-    # Optional: Validate batch size if GPUs are available
-    if torch.cuda.is_available():
-        num_gpus = torch.cuda.device_count()
-        if args.batch_size % num_gpus != 0:
-            raise ValueError(f"Batch size ({args.batch_size}) must be a multiple of GPU count ({num_gpus}). "
-                            f"Try --batch-size {num_gpus if num_gpus else 'appropriate_multiple'}.")
-    
-    setup_execution_structure()
-    dataset_path = unzip_dataset(args.mode, args.force_extract)
-    logging.info(f"Dataset ready at: {dataset_path}")
-    
-    validate_dataset(args.mode)
-    
-    # ✅ FIX: Ensure dataset structure exists before splitting
-    create_dataset_structure(args.mode)  
-    
-    dataset_yolo_path = split_dataset(args.mode)
-    logging.info(f"Dataset split and saved at: {dataset_yolo_path}")
-    
-    augment_data(dataset_yolo_path)
-    logging.info(f"Augmentation applied to training dataset: {dataset_yolo_path}")
-    
-    model_path = select_model(args.mode, args.use_pretrained)
-    logging.info(f"Using model: {model_path}")
-    
-    output_dir = os.path.join(get_repo_root(), "cache", "results")
-    os.makedirs(output_dir, exist_ok=True)
-    SessionResults = train_model(dataset_yolo_path, model_path, device, args.epochs, args.batch_size)
-    
-    # Export logs once with correct parameter name
-    export_logs()
-    
-    # Zip and download results
-    zip_and_download_results()
-    logging.info("✅ Training results have been zipped and are ready for download at the link above.")
-    
-    # Display last training session
-    if args.show_results:
-        logging.info("📊 Displaying contents of the last training session...")
-        display_last_training_session(SessionResults)
-
-    # Clean up everything
-    if args.cleanup:
-        logging.info("✅ Cleaning up temporary files...")
-        cleanup_after_training()
-        
-    logging.info("✅ Training pipeline completed successfully.")
-    logging.shutdown()
-
-if __name__ == "__main__":
-    setup_logging()  # ensure logging is configured, so emojis appear in all log entries
-    main()
+``` 
