@@ -28,6 +28,7 @@ from rich.status import Status
 from rich.text import Text
 from rich.style import Style
 from rich.layout import Layout
+import random
 
 
 # Add project root to PATH if needed
@@ -49,12 +50,12 @@ except ImportError:
         from rich.markdown import Markdown
         from rich.syntax import Syntax
         from rich.table import Table
+        
         RICH_AVAILABLE = True
         console = Console()
     except ImportError:
         RICH_AVAILABLE = False
         print("Note: Install 'rich' package for enhanced output: pip install rich")
-
 def print_header(title):
     """
     Print a section header with consistent formatting.
@@ -182,7 +183,9 @@ def main():
     run_command(["python", "lego_cli.py", "--help"], "Display main help information")
     
     # Test brick detection
-    test_image = "presentation/Test_images/BricksPics/image_10.jpg"
+    test_images_dir = "presentation/Test_images/BricksPics/"
+    test_images = [os.path.join(test_images_dir, f) for f in os.listdir(test_images_dir) if os.path.isfile(os.path.join(test_images_dir, f))]
+    test_image = random.choice(test_images) if test_images else None
     if os.path.exists(test_image):
         run_command([
             "python", "lego_cli.py", "detect-bricks",
@@ -193,7 +196,9 @@ def main():
         ], "Detect bricks in an image")
     
     # Test stud detection
-    test_studs_image = "presentation/Test_images/StudsPics/image_10_LegoBrick_0_c87.jpg"
+    test_studs_dir = "presentation/Test_images/StudsPics/"
+    test_studs_images = [os.path.join(test_studs_dir, f) for f in os.listdir(test_studs_dir) if os.path.isfile(os.path.join(test_studs_dir, f))]
+    test_studs_image = random.choice(test_studs_images) if test_studs_images else None
     if os.path.exists(test_studs_image):
         run_command([
             "python", "lego_cli.py", "detect-studs",
