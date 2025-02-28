@@ -25,7 +25,7 @@ import piexif
 # Add the parent directory to the path so we can import the utils module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from utils.model_utils import read_exif
+    from scripts.Legacy_scripts.model_utils import read_exif
     IMPORT_SUCCESS = True
 except ImportError:
     IMPORT_SUCCESS = False

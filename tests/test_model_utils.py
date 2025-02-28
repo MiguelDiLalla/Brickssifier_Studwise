@@ -26,7 +26,7 @@ import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Now import the module
-from utils import model_utils
+from scripts.Legacy_scripts import model_utils
 
 # Whether to clean EXIF metadata from test images before running tests
 # Set to True to ensure tests run with fresh metadata each time

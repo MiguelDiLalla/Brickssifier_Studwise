@@ -1,733 +1,1260 @@
-import os
-import sys
+"""
+Model Utilities for LEGO Bricks ML Vision
+
+This module provides core machine learning utilities for the LEGO Bricks ML Vision project.
+It contains functions for model loading, inference, metadata handling, and result visualization.
+
+Key features:
+  - YOLO model loading and inference for brick and stud detection
+  - EXIF metadata reading/writing with scan count tracking
+  - Image annotation and visualization capabilities
+  - Dimension classification based on stud detection
+  - Rich logging with emoji markers for readability
+
+Usage examples:
+  - detect_bricks() - Detect LEGO bricks in images
+  - detect_studs() - Detect studs on LEGO bricks
+  - run_full_algorithm() - Run the complete detection pipeline
+
+Author: Miguel DiLalla
+"""
+
 import json
-import random
 import logging
 import datetime
-import hashlib
-import argparse
-import cv2
+import platform
+import os
+import base64
+import sys
+import requests
+from pathlib import Path
+from typing import Dict, List, Union, Optional, Tuple, Any
+
 import numpy as np
 import torch
-import shutil
-import zipfile
-import matplotlib.pyplot as plt
-from ultralytics import YOLO
-import piexif
 import cv2
+import piexif
 from PIL import Image, ImageDraw, ImageFont, ExifTags
+from ultralytics import YOLO
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.progress import Progress, track, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.status import Status
+from rich.text import Text
+from rich.style import Style
+from rich.layout import Layout
 
-import sys
-import os
-# Append the project root folder (one level up from the utils folder)
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# ensure lego_cli.py is in the PYTHONPATH
-sys.path.append(os.path.join(os.getcwd(), "notebooks/LEGO_Bricks_ML_Vision"))
 
-from lego_cli import EmojiFormatter  # Import the custom EmojiFormatter class from lego_cli.py
 
-# Setup logging
+# Import project modules - will gracefully handle if rich_utils is not available
+try:
+    from utils.rich_utils import (
+        RICH_AVAILABLE, console, create_progress, 
+        create_status_panel, display_results_table
+    )
+except ImportError:
+    # Fallback if rich_utils is not available
+    RICH_AVAILABLE = False
+    try:
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+        RICH_AVAILABLE = True
+        console = Console()
+    except ImportError:
+        RICH_AVAILABLE = False
+        print("Warning: 'rich' package not available. Install with: pip install rich")
+
+# Set up professional logging with emoji markers
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()]
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger()
-for handler in logger.handlers:
-    pass
-    pass
-    handler.setFormatter(EmojiFormatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger = logging.getLogger(__name__)
+logger.info("🚀 Model Utils module loaded.")
 
-def load_model(mode):
-    """
-    Loads the YOLO model based on the selected mode.
-    """
-    # Treat 'classify' mode as 'bricks' for model loading.
-    if mode == "classify":
-        mode = "bricks"
+# =============================================================================
+# Configuration and Setup
+# =============================================================================
 
-    model_paths = {
-        "bricks": "presentation/Models_DEMO/Brick_Model_best20250123_192838t.pt",
-        "studs": "presentation/Models_DEMO/Stud_Model_best20250124_170824.pt"
+def setup_utils(repo_download=False):
+    """
+    Initialize and return a configuration dictionary with all global variables and defaults.
+    
+    Args:
+        repo_download (bool): Whether to download missing assets from repository.
+        
+    Returns:
+        dict: Configuration dictionary with paths, models, and settings.
+    """
+    CONFIG_DICT = {}  # New configuration dictionary
+    
+    # Project repository configuration
+    userGithub = "MiguelDiLalla"
+    repoGithub = "LEGO_Bricks_ML_Vision"
+    CONFIG_DICT["REPO_URL"] = f"https://api.github.com/repos/{userGithub}/{repoGithub}/contents/"
+    logger.info("📌 REPO URL set to: %s", CONFIG_DICT["REPO_URL"])
+    
+    # Define model and test images folders relative to project structure.
+    CONFIG_DICT["MODELS_PATHS"] = {
+        "bricks": r"presentation/Models_DEMO/Brick_Model_best20250123_192838t.pt",
+        "studs": r"presentation/Models_DEMO/Stud_Model_best20250124_170824.pt"
+    }
+    CONFIG_DICT["TEST_IMAGES_FOLDERS"] = {
+        "bricks": r"presentation/Test_images/BricksPics",
+        "studs": r"presentation/Test_images/StudsPics"
     }
     
-    if mode not in model_paths:
-        raise ValueError(f"Invalid mode '{mode}'. Choose from 'bricks' or 'studs'.")
+    logger.info("📂 Current working directory: %s", os.getcwd())
+
+    def get_image_files(folder):
+        """Get all image files from a folder with supported extensions."""
+        full_path = os.path.join(os.getcwd(), folder)
+        image_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.gif')
+        if not os.path.exists(full_path):
+            return []
+        return [os.path.join(full_path, f) for f in os.listdir(full_path) if f.lower().endswith(image_extensions)]
     
-    model_path = model_paths[mode]
-    
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found: {model_path}")
-    
-    logging.info(f"🔹 Loading model: {model_path}")
-    return YOLO(model_path)
-def apply_nms(detections, overlap_threshold):
-    """
-    Applies Non-Maximum Suppression (NMS) to filter overlapping bounding boxes.
-
-    Args:
-        detections (list): List of detected objects with bounding boxes.
-        overlap_threshold (float): IoU threshold for suppression.
-
-    Returns:
-        list: Filtered list of detections after NMS.
-    """
-    if not detections:
-        return []
-    # Convert to NumPy array for easier calculations
-    boxes = np.array([det["bbox"] for det in detections])
-
-    boxes = np.array([det["bbox"] for det in detections])
-    scores = np.array([det["confidence"] for det in detections])
-
-    # Apply OpenCV NMS
-    indices = cv2.dnn.NMSBoxes(boxes.tolist(), scores.tolist(), score_threshold=0.5, nms_threshold=overlap_threshold)
-
-    return [detections[i] for i in indices.flatten()]
-
-
-def predict(image_paths, model, mode, batch_size=8, save_annotated=False, plt_annotated=False, results_folder=None):
-    """
-    Perform batch prediction on a list of images.
-
-    Args:
-        image_paths (list): List of file paths for input images.
-        model (YOLO): A loaded YOLO model.
-        mode (str): Inference mode, such as "bricks", "studs", or "classify".
-        batch_size (int): Number of images processed per batch.
-        save_annotated (bool): Flag to save annotated images.
-        plt_annotated (bool): Flag to display annotated images.
-        results_folder (str): Directory to store results.
-
-    Returns:
-        list: A list of dictionaries with image paths and detection results.
-    """
-    results = []
-    num_images = len(image_paths)
-    logging.info(f"Total images to process: {num_images}")
-
-    for i in range(0, num_images, batch_size):
-        batch_paths = image_paths[i:i + batch_size]
-        # Load images; use list comprehension with error handling
-        batch_images = []
-        valid_paths = []
-        for img_path in batch_paths:
-            img = cv2.imread(img_path)
-            if img is None:
-                logging.warning(f"[Warning] Unable to load image: {img_path}")
-            else:
-                batch_images.append(img)
-                valid_paths.append(img_path)
-
-        if not batch_images:
-            continue
-
-        batch_results = model(batch_images)
-        for img_path, result in zip(valid_paths, batch_results):
-            annotated_img = None
-            if save_annotated or plt_annotated:
-                annotated_img = result.plot()
-                if save_annotated and results_folder:
-                    base_name = os.path.basename(img_path)
-                    save_path = os.path.join(results_folder, f"annotated_{base_name}")
-                    cv2.imwrite(save_path, annotated_img)
-                    logging.info(f"✅ Annotated image saved to: {save_path}")
-                if plt_annotated:
-                    plt.imshow(cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB))
-                    plt.title(f"Annotated {os.path.basename(img_path)}")
-                    plt.axis('off')
-                    plt.show()
-
-            # Example of processing detections; additional mode-specific code can go here
-            results.append({
-                'image_path': img_path,
-                'detections': result.boxes.data.cpu().numpy().tolist()
-            })
-    return results
-
-STUD_TO_DIMENSION_MAP = {
-    1: "1x1",
-    2: "2x1",
-    3: "3x1",
-    4: ["2x2", "4x1"],
-    6: ["3x2", "6x1"],
-    8: ["4x2", "8x1"],
-    10: "10x1",
-    12: "6x2",
-    16: "8x2",
-}
-
-def classify_brick(brick_image, model_studs, confidence_threshold=0.5):
-    """
-    Classifies the dimensions of a single LEGO brick by detecting and counting studs.
-
-    Args:
-        brick_image (numpy.ndarray): Cropped image of the brick.
-        model_studs (YOLO): YOLO model trained to detect studs.
-        confidence_threshold (float): Minimum confidence score for stud detections.
-
-    Returns:
-        str: Classified dimension of the brick (e.g., "2x2", "4x1", or "UKN").
-    """
-    # Detect studs in the brick image
-    results = model_studs.predict(brick_image)
-
-    # Filter detections based on confidence threshold
-    studs = [detection for detection in results[0].boxes if detection.conf[0] >= confidence_threshold]
-
-    # Count the number of detected studs
-    stud_count = len(studs)
-
-    # Determine possible dimensions based on stud count
-    possible_dimensions = STUD_TO_DIMENSION_MAP.get(stud_count, "UKN")
-
-    if possible_dimensions == "UKN":
-        return "UKN"
-
-    # If multiple possible dimensions, apply heuristics to select the most likely one
-    if isinstance(possible_dimensions, list):
-        # Example heuristic: Use aspect ratio to distinguish between dimensions
-        height, width = brick_image.shape[:2]
-        aspect_ratio = width / height
-
-        # Define aspect ratio thresholds (these values may need tuning)
-        if aspect_ratio > 1.5:
-            return possible_dimensions[1]  # Likely a longer brick (e.g., "4x1")
+    CONFIG_DICT["TEST_IMAGES"] = {}
+    for key, folder in CONFIG_DICT["TEST_IMAGES_FOLDERS"].items():
+        full_folder_path = os.path.join(os.getcwd(), folder)
+        if os.path.exists(full_folder_path):
+            files = get_image_files(folder)
+            CONFIG_DICT["TEST_IMAGES"][key] = files
+            logger.info("✅ Found %d images in %s", len(files), folder)
         else:
-            return possible_dimensions[0]  # Likely a square brick (e.g., "2x2")
+            CONFIG_DICT["TEST_IMAGES"][key] = []
+            logger.warning("⚠️ Folder %s does not exist; no images found.", folder)
+    
+    # Load models from disk or download them if needed
+    CONFIG_DICT["LOADED_MODELS"] = {}
+    for model_name, relative_path in CONFIG_DICT["MODELS_PATHS"].items():
+        local_path = os.path.join(os.getcwd(), relative_path)
+        if not os.path.exists(local_path):
+            if repo_download:
+                model_url = CONFIG_DICT["REPO_URL"] + relative_path
+                logger.info("⬇️  Downloading %s model from %s", model_name, model_url)
+                response = requests.get(model_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    model_data = base64.b64decode(data.get("content", ""))
+                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                    with open(local_path, "wb") as model_file:
+                        model_file.write(model_data)
+                else:
+                    logger.error("❌ Failed to download %s model from %s", model_name, model_url)
+            else:
+                logger.error("❌ %s model not found locally and repo_download is disabled.", model_name)
+        try:
+            CONFIG_DICT["LOADED_MODELS"][model_name] = YOLO(local_path)
+            logger.info("✅ %s model loaded.", model_name.capitalize())
+        except Exception as e:
+            logger.error("❌ Error loading %s model: %s", model_name, e)
+            CONFIG_DICT["LOADED_MODELS"][model_name] = None
+    
+    # Retrieve project logo
+    try:
+        local_logo_path = os.path.join(os.getcwd(), "presentation", "logo.png")
+        if os.path.exists(local_logo_path):
+            CONFIG_DICT["LOGO_NUMPY"] = cv2.imread(local_logo_path)
+            logger.info("🖼️ Logo found locally.")
+        else:
+            if repo_download:
+                logo_url = CONFIG_DICT["REPO_URL"] + "presentation/logo.png"
+                logger.info("⬇️ Logo not found locally. Downloading from %s", logo_url)
+                response = requests.get(logo_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    logo_data = base64.b64decode(data.get("content", ""))
+                    os.makedirs(os.path.dirname(local_logo_path), exist_ok=True)
+                    with open(local_logo_path, "wb") as logo_file:
+                        logo_file.write(logo_data)
+                    CONFIG_DICT["LOGO_NUMPY"] = cv2.imread(local_logo_path)
+                else:
+                    logger.error("❌ Failed to download logo from %s", logo_url)
+                    CONFIG_DICT["LOGO_NUMPY"] = None
+            else:
+                logger.error("❌ Logo not found locally and repo_download is disabled.")
+                CONFIG_DICT["LOGO_NUMPY"] = None
+    except Exception as e:
+        logger.error("❌ Error loading logo: %s", e)
+        CONFIG_DICT["LOGO_NUMPY"] = None
 
-    return possible_dimensions
+    # Mapping for studs to brick dimensions.
+    CONFIG_DICT["STUDS_TO_DIMENSIONS_MAP"] = {
+        1: "1x1",
+        2: "2x1",
+        3: "3x1",
+        4: ["2x2", "4x1"],
+        6: ["3x2", "6x1"],
+        8: ["4x2", "8x1"],
+        10: "10x1",
+        12: ["6x2", "12x1"],
+        16: ["4x4", "8x2"]
+    }
 
-def classify_brick_from_studs(studs, image, working_folder, save_annotated=False, plt_annotated=False):
+    # Default EXIF metadata backbone.
+    CONFIG_DICT["EXIF_METADATA_DEFINITIONS"] = {
+        "boxes_coordinates": {},       # Detected bounding box coordinates.
+        "orig_shape": [0, 0],            # Original image dimensions.
+        "speed": {                     # Processing time metrics.
+            "preprocess": 0.0,
+            "inference": 0.0,
+            "postprocess": 0.0
+        },
+        "mode": "",                    # Operation mode: detection/classification.
+        "path": "",                    # Original image file path.
+        "os_full_version_name": "",    # OS version information.
+        "processor": "",               # Processor details.
+        "architecture": "",            # System architecture.
+        "hostname": "",                # Host machine name.
+        "timestamp": "",               # Time of processing.
+        "annotated_image_path": "",    # Path for annotated output.
+        "json_results_path": "",       # Path for exported metadata.
+        "TimesScanned": 0,             # Number of inference sessions.
+        "Repository": CONFIG_DICT["REPO_URL"],        # Repository URL.
+        "message": ""                  # Custom message.
+    }
+    
+    return CONFIG_DICT
+
+config = setup_utils()
+
+# =============================================================================
+# EXIF Functions
+# =============================================================================
+
+def read_exif(image_path, TREE=config["EXIF_METADATA_DEFINITIONS"]):
     """
-    Classifies the brick dimension based on detected stud positions.
-
+    Reads EXIF metadata from an image file and logs scan status.
+    
     Args:
-        studs (list): List of tuples representing stud bounding boxes (x_min, y_min, x_max, y_max).
-        image (numpy.ndarray): The original image containing the detected studs.
-        working_folder (str): Directory to save annotated images.
-        save_annotated (bool): Flag to save annotated images.
-        plt_annotated (bool): Flag to display annotated images.
-
+        image_path (str): Path to the image file to read metadata from
+        TREE (dict, optional): Dictionary structure for default values if metadata is missing
+            Defaults to EXIF_METADATA_DEFINITIONS from config.
+            
     Returns:
-        str: Classified brick dimension or an error message.
+        dict: Parsed metadata or empty dictionary if no metadata found
+    
+    Notes:
+        - Handles special case for "image0.jpg" as numpy array source
+        - Updates TimesScanned for tracking processing history
     """
-    if len(studs) == 0:
-        print("[INFO] No studs detected. Returning 'Unknown'.")
-        return "Unknown"
+    # Use default EXIF DEFINITIONS from CONFIG if TREE is None
+    if "image0.jpg" in image_path :
+        logger.info("🆕 Using numpy array source.")
+        return {}
 
-    # Validate number of studs
-    num_studs = len(studs)
-    valid_stud_counts = STUD_TO_DIMENSION_MAP.keys()
-    if num_studs not in valid_stud_counts:
-        print(f"[ERROR] Deviant number of studs detected ({num_studs}). Returning 'Error'.")
-        return "Deviant number of studs. Definitely bad inference. Sorry."
+    if TREE is None:
+        TREE = config["EXIF_METADATA_DEFINITIONS"]
 
-    # Extract stud center coordinates
-    centers = [((x1 + x2) / 2, (y1 + y2) / 2) for x1, y1, x2, y2 in studs]
+    try:
+        with Image.open(image_path) as image:
+            exif_bytes = image.info.get("exif")
+            if not exif_bytes:
+                logger.warning("⚠️ No EXIF data found in %s", image_path)
+                return {}
 
-    # Mean bounding box size for spacing calculation
-    box_sizes = [((x_max - x_min + y_max - y_min) / 2) for x_min, y_min, x_max, y_max in studs]
+            exif_dict = piexif.load(exif_bytes)
+    except Exception as e:
+        logger.error("❌ Failed to open image %s > %s", image_path, e)
+        return {}
 
-    # Fit a regression line using least squares
-    xs, ys = zip(*centers)
-    m, b = np.polyfit(xs, ys, 1)  # Linear regression (y = mx + b)
+    user_comment_tag = piexif.ExifIFD.UserComment
+    user_comment = exif_dict.get("Exif", {}).get(user_comment_tag, b"")
+    if not user_comment:
+        logger.warning("⚠️ No UserComment tag found in %s", image_path)
+        return {}
 
-    # Compute deviation from the line
-    deviations = [abs(y - (m * x + b)) for x, y in centers]
+    try:
+        comment_str = user_comment.decode('utf-8', errors='ignore')
+        metadata = json.loads(comment_str)
+        # Ensure defaults from TREE are present
+        for key, default in TREE.items():
+            metadata.setdefault(key, default)
+        times = metadata.get("TimesScanned", 0)
+        if times:
+            logger.info("🔄 Image %s has been scanned %d time(s)", image_path, times)
+        else:
+            logger.info("🆕 Image %s has not been scanned before", image_path)
+        return metadata
+    except Exception as e:
+        logger.error("❌ Failed to parse EXIF metadata from %s: %s", image_path, e)
+        return {}
+    
+def write_exif(image_path, metadata):
+    """
+    Writes metadata to the image's EXIF UserComment tag.
+    
+    Args:
+        image_path (str): Path to the image file to update
+        metadata (dict): Metadata dictionary to serialize and store
+        
+    Returns:
+        None
+        
+    Notes:
+        - Updates 'TimesScanned' based on previous metadata
+        - Handles encoding as UTF-8 and conversion to EXIF format
+        - Logs success or failure of the operation
+    """
+    try:
+        image = Image.open(image_path)
+    except Exception as e:
+        logger.error("❌ Failed to open image %s: %s", image_path, e)
+        return
 
-    # Decision: Nx1 or Nx2
-    threshold = np.mean(box_sizes) / 2
-    classification_aux = "Nx1" if max(deviations) < threshold else "Nx2"
-
-    # Determine final brick dimension
-    possible_dimensions = STUD_TO_DIMENSION_MAP.get(num_studs, "Unknown")
-
-    if isinstance(possible_dimensions, list):  # If there is ambiguity
-        final_dimension = possible_dimensions[0] if classification_aux == "Nx2" else possible_dimensions[1]
+    exif_bytes = image.info.get("exif")
+    if exif_bytes:
+        exif_dict = piexif.load(exif_bytes)
     else:
-        final_dimension = possible_dimensions
+        exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
 
-    # Visualization
-    if save_annotated or plt_annotated:
-        plt.figure(figsize=(6, 6), facecolor='black')
-        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    user_comment_tag = piexif.ExifIFD.UserComment
 
-        # Plot studs
-        for x, y in centers:
-            plt.scatter(x, y, color='red', s=40)
+    # Update TimesScanned based on previous metadata in UserComment
+    prev_meta = read_exif(image_path) if image_path != "Image0.jpg" else {}
+    if prev_meta and "TimesScanned" in prev_meta:
+        metadata["TimesScanned"] = prev_meta["TimesScanned"] + 1
+    else:
+        metadata["TimesScanned"] = 1
+    logger.info("🆕 Setting TimesScanned to %d for image %s", metadata["TimesScanned"], image_path)
 
-        # Plot regression line
-        x_line = np.array([min(xs), max(xs)])
-        y_line = m * x_line + b
-        plt.plot(x_line, y_line, color='cyan', linestyle='dashed')
+    formatted_metadata = json.dumps(metadata, indent=4)
+    encoded_metadata = formatted_metadata.encode('utf-8')
+    exif_dict["Exif"][user_comment_tag] = encoded_metadata
 
-        # Display classification decision
-        plt.text(10, 30, f"Classification: {final_dimension}", fontsize=14, color='white',
-                 bbox=dict(facecolor='black', alpha=0.7))
+    new_exif_bytes = piexif.dump(exif_dict)
+    try:
+        image.save(image_path, image.format if image.format else "jpeg", exif=new_exif_bytes)
+        logger.info("✅ EXIF metadata written to %s", image_path)
+    except Exception as e:
+        logger.error("❌ Failed to save image with updated EXIF: %s", e)
 
-        plt.axis('off')
-        if save_annotated:
-            os.makedirs(working_folder, exist_ok=True)
-            save_path = os.path.join(working_folder, "classification_result.png")
-            plt.savefig(save_path, bbox_inches='tight')
-            print(f"[INFO] Annotated image saved to: {save_path}")
-        if plt_annotated:
-            plt.show()
+# =============================================================================
+# Metadata Extraction from YOLO Results
+# =============================================================================
 
-    return final_dimension
-
-def detect_and_classify(image_paths, model_bricks, model_studs, confidence_threshold=0.5, overlap_threshold=0.5):
+def extract_metadata_from_yolo_result(results, orig_image):
     """
-    Detects LEGO bricks in images and classifies their dimensions.
-
+    Extracts relevant metadata from YOLO results and the original image.
+    
     Args:
-        image_paths (list of str): Paths to the input images.
-        model_bricks (YOLO): YOLO model trained to detect bricks.
-        model_studs (YOLO): YOLO model trained to detect studs.
-        confidence_threshold (float): Minimum confidence score for detections.
-        overlap_threshold (float): Overlap threshold for Non-Maximum Suppression.
-
+        results (list): YOLO detection results
+        orig_image (Union[str, np.ndarray]): Either image path or numpy array
+            
     Returns:
-        list of dict: Detection results for each image, including bounding boxes, confidence scores, and classified dimensions.
+        dict: Structured metadata dictionary with detection results and system info
+        
+    Notes:
+        - Handles image as numpy array or file path
+        - Records detailed box information, confidence scores, and class IDs
+        - Preserves previous scan information when available
     """
-    results = []
+    if isinstance(orig_image, str):
+        loaded_image = cv2.imread(orig_image)
+        shape = list(loaded_image.shape[:2]) if loaded_image is not None else [0, 0]
+    elif hasattr(orig_image, "shape"):
+        shape = list(orig_image.shape[:2])
+    else:
+        shape = [0, 0]
 
-    # Load and preprocess images
-    images = []
-    for path in image_paths:
-        image = cv2.imread(path)
-        if image is None:
-            logging.warning(f"Unable to read image: {path}")
-            continue
-        images.append((path, image))
+    boxes = (results[0].boxes.xyxy.cpu().numpy()
+             if results and results[0].boxes.xyxy is not None
+             else np.array([]))
+    image_path = results[0].path if hasattr(results[0], "path") and results[0].path else ""
 
-    # Perform batch inference to detect bricks
-    brick_detections = model_bricks.predict([img[1] for img in images])
+    previous_metadata = {}
+    if image_path != "Image0.jpg":
+        try:
+            previous_metadata = read_exif(image_path)
+        except Exception as e:
+            logger.error("❌ Error reading EXIF from %s: %s", image_path, e)
+            previous_metadata = {}
+    else:
+        logger.warning("💡 No previous Scans to read, you inputed a numpy array")
 
-    for (path, image), detections in zip(images, brick_detections):
-        image_results = []
-        for detection in detections.boxes:
-            x1, y1, x2, y2 = map(int, detection.xyxy[0])  # Bounding box coordinates
-            confidence = float(detection.conf[0])  # Confidence score
+    times_scanned = previous_metadata.get("TimesScanned", 0)
+    times_scanned = times_scanned + 1 if times_scanned else 1
 
-            # Apply confidence threshold
-            if confidence < confidence_threshold:
-                continue
+    message_value = "Muchas gracias por ejecutar la DEMO del projecto"
+    # Retrieve additional details from YOLO results
+    boxes_np = results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([])
+    confidences_np = results[0].boxes.conf.cpu().numpy() if hasattr(results[0].boxes, "conf") and results[0].boxes.conf is not None else np.array([])
+    classes_np = results[0].boxes.cls.cpu().numpy() if hasattr(results[0].boxes, "cls") and results[0].boxes.cls is not None else np.array([])
 
-            # Crop the detected brick from the image
-            brick_image = image[y1:y2, x1:x2]
+    # Build detailed information for each detection
+    boxes = []
+    for idx, box in enumerate(boxes_np):
+        box_info = {
+            "coordinates": box.tolist(),
+            "confidence": float(confidences_np[idx]) if idx < len(confidences_np) else None,
+            "class": int(classes_np[idx]) if idx < len(classes_np) else None
+        }
+        boxes.append(box_info)
+    speed_data = results[0].speed if hasattr(results[0], "speed") else {"preprocess": 0.0, "inference": 0.0, "postprocess": 0.0}
+    # Get class names from results
+    class_names = results[0].names if hasattr(results[0], "names") else {}
+    
+    
 
-            # Classify the brick's dimensions
-            dimension_label = classify_brick(brick_image, model_studs, confidence_threshold)
+    if isinstance(class_names, dict):
+        class_names = list(class_names.values())
 
-            # Store the detection result
-            image_results.append({
-                "bbox": [x1, y1, x2, y2],
-                "confidence": confidence,
-                "dimension": dimension_label
-            })
 
-        results.append({
-            "image_path": path,
-            "detections": image_results
-        })
+    mode_value = class_names[0] if class_names else "obj"
 
-    return results
+    metadata = {
+        "boxes_coordinates": {str(idx): box for idx, box in enumerate(boxes)},
+        "orig_shape": shape,
+        "speed": {"preprocess": speed_data.get("preprocess", 0.0), 
+                  "inference": speed_data.get("inference", 0.0), 
+                  "postprocess": speed_data.get("postprocess", 0.0)},
+        "mode": mode_value,
+        "path": image_path,
+        "os_full_version_name": platform.platform(),
+        "processor": platform.processor(),
+        "architecture": platform.machine(),
+        "hostname": platform.node(),
+        "timestamp": datetime.datetime.now().isoformat(),
+        "annotated_image_path": "",
+        "json_results_path": "",
+        "TimesScanned": times_scanned,
+        "Repository": config["REPO_URL"],
+        "message": message_value
+    }
+    return metadata
 
-def draw_bboxes(image, detections, with_labels=True, box_color=(0, 255, 0), text_color=(255, 255, 255)):
+
+# =============================================================================
+# Image Annotation Functions
+# =============================================================================
+
+def annotate_scanned_image(image_path):
     """
-    Draws bounding boxes with optional labels on an image. The thickness and font scale
-    are determined dynamically based on the image dimensions.
-
+    Annotates the provided image with the metadata retrieved via read_exif().
+    
     Args:
-        image (numpy.ndarray): The input image on which to draw.
-        detections (list of dict): Each dict should have 'bbox' (list of [x1, y1, x2, y2]),
-                                   'confidence' (float), and 'dimension' (str) keys.
-        with_labels (bool): If True, labels the boxes with dimension and confidence.
-        box_color (tuple): Color of the bounding box in BGR format.
-        text_color (tuple): Color of the text in BGR format.
-
+        image_path (str): Path to the image file to annotate
+        
     Returns:
-        numpy.ndarray: The image with drawn bounding boxes.
+        np.ndarray: The annotated image with bounding boxes and project logo
+        
+    Notes:
+        - Reads metadata directly from image EXIF data
+        - Applies colored bounding boxes for detections
+        - Adds the project logo to the bottom of the image
     """
-    h, w = image.shape[:2]
-    # Dynamically determine thickness and font_scale based on image dimensions
-    dynamic_thickness = max(1, int(round(min(h, w) / 500)))
-    dynamic_font_scale = max(0.5, min(h, w) / 1000)
+    # Load image from path
+    image = cv2.imread(image_path)
+    if image is None:
+        logger.error("❌ Failed to load image for annotation: %s", image_path)
+        return None
 
-    for det in detections:
-        x1, y1, x2, y2 = det['bbox']
-        cv2.rectangle(image, (x1, y1), (x2, y2), box_color, dynamic_thickness)
+    # Retrieve full metadata using read_exif()
+    metadata = read_exif(image_path)
 
-        if with_labels:
-            label = f"{det['dimension']} ({det['confidence']:.2f})"
-            (w_box, h_box), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, dynamic_font_scale, dynamic_thickness)
-            cv2.rectangle(image, (x1, y1 - h_box - 5), (x1 + w_box, y1), box_color, -1)
-            cv2.putText(image, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, dynamic_font_scale, text_color, dynamic_thickness)
+    label = metadata.get('mode', 'Label not found')
+    if label != 'Label not found':
+        label = label[:-1]
+
+    for key, box_info in metadata.get('boxes_coordinates', {}).items():
+        if isinstance(box_info, dict):
+            coords = box_info.get("coordinates", [])
+        elif isinstance(box_info, list):
+            coords = box_info
+        else:
+            coords = []
+
+        if len(coords) == 4:
+            x1, y1, x2, y2 = map(int, coords)
+            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(image, f"{label}", (x1, y1-10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+
+    # Add the logo to the bottom of the image
+    logo = config["LOGO_NUMPY"]
+    if logo is not None:
+        # Convert the logo from black and white to red and white:
+        colored_logo = logo.copy()
+        # Identify "black" pixels (assumes near-zero values indicate black)
+        black_mask = (colored_logo[:, :, 0] < 128) & (colored_logo[:, :, 1] < 128) & (colored_logo[:, :, 2] < 128)
+        # Set these black pixels to red (BGR: (0, 0, 255))
+        colored_logo[black_mask] = [0, 0, 255]
+        logo = colored_logo
+
+        img_h, img_w, _ = image.shape
+        logo_height, logo_width, _ = logo.shape
+        # Resize the annotated image to match the logo's width (preserve aspect ratio)
+        new_img_h = int(img_h * (logo_width / img_w))
+        resized_image = cv2.resize(image, (logo_width, new_img_h))
+        # Combine the resized image and the logo vertically
+        composite_image = np.vstack((resized_image, logo))
+        # Add a red margin to the composite image
+        composite_image = cv2.copyMakeBorder(composite_image, 10, 10, 10, 10,
+                                             cv2.BORDER_CONSTANT, value=(0, 0, 255))
+        
+        # print all paths avalaible in the metadata after validating each one
+        for key, value in metadata.items():
+            if key == "annotated_image_path" and value != "":
+                logger.info("📂 Annotated image path: %s", value)
+            if key == "json_results_path" and value != "":
+                logger.info("📂 JSON results path: %s", value)
+            if key == "path" and value != "":
+                logger.info("📂 Original image path: %s", value)
+
+        return composite_image
+    
+    else:
+        logger.warning("⚠️ No logo available for annotation.")
 
     return image
 
-def visualize_single_image(image_path, detections=None, with_labels=True, cache_dir="cache"):
+
+def read_detection(image_path):
     """
-    Generates an annotated image with metadata displayed below and saves it to the cache.
-
-    Args:
-        image_path (str): Path to the image file.
-        detections (list of dict, optional): Detections to draw on the image.
-        with_labels (bool): If True, displays labels on the bounding boxes.
-        cache_dir (str): Directory to save the cached image.
-
-    Returns:
-        str: Path to the saved annotated image in the cache.
-    """
-    # Load image
-    image = cv2.imread(image_path)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    # Draw bounding boxes if detections are provided
-    if detections:
-        image = draw_bboxes(image, detections, with_labels)
-
-    # Extract EXIF metadata
-    pil_image = Image.open(image_path)
-    exif_data = pil_image._getexif()
-    metadata = ""
-    if exif_data:
-        for tag_id, value in exif_data.items():
-            tag = TAGS.get(tag_id, tag_id)
-            metadata += f"{tag}: {value}\n"
-
-    # Create figure with space for metadata
-    fig, ax = plt.subplots(figsize=(8, 10))
-    ax.imshow(image)
-    ax.axis('off')
-
-    # Add metadata below the image
-    plt.figtext(0.5, 0.01, metadata, wrap=True, horizontalalignment='center', fontsize=10)
-
-    # Save to cache
-    os.makedirs(cache_dir, exist_ok=True)
-    cached_image_path = os.path.join(cache_dir, os.path.basename(image_path))
-    plt.savefig(cached_image_path, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    return cached_image_path
-
-def visualize_grid(images_folder_path, detections_dict=None, mode='bricks', grid_dimensions=(2, 2), cache_dir="cache"):
-    """
-    Creates a grid of images with optional bounding boxes and labels, and saves it to the cache.
-
-    Args:
-        images_folder_path (str): Path to the folder containing images.
-        detections_dict (dict, optional): Dictionary where keys are image filenames and values are detection lists.
-        mode (str): Mode of visualization ('bricks', 'studs', 'classify').
-        grid_dimensions (tuple): Dimensions of the grid (rows, cols).
-        cache_dir (str): Directory to save the generated grid image.
-
-    Returns:
-        str: Path to the saved grid image in the cache.
-    """
-    # Ensure cache directory exists
-    os.makedirs(cache_dir, exist_ok=True)
-
-    # Retrieve image files
-    image_files = [f for f in os.listdir(images_folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-    selected_images = image_files[:grid_dimensions[0] * grid_dimensions[1]]
-
-    # Load images and apply detections if available
-    images = []
-    for img_file in selected_images:
-        img_path = os.path.join(images_folder_path, img_file)
-        image = cv2.imread(img_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        if detections_dict and img_file in detections_dict:
-            image = draw_bboxes(image, detections_dict[img_file], with_labels=True)
-        images.append(image)
-
-    # Determine max width and height for resizing
-    max_width = max(image.shape[1] for image in images)
-    max_height = max(image.shape[0] for image in images)
-
-    # Resize images to have the same dimensions
-    resized_images = [cv2.resize(image, (max_width, max_height)) for image in images]
-
-    # Create the grid
-    rows, cols = grid_dimensions
-    grid_image = np.zeros((rows * max_height, cols * max_width, 3), dtype=np.uint8)
-
-    for idx, image in enumerate(resized_images):
-        row = idx // cols
-        col = idx % cols
-        grid_image[row * max_height:(row + 1) * max_height, col * max_width:(col + 1) * max_width, :] = image
-
-    # Save the grid image to cache
-    grid_filename = f"{mode}_grid.jpg"
-    grid_path = os.path.join(cache_dir, grid_filename)
-    grid_image_bgr = cv2.cvtColor(grid_image, cv2.COLOR_RGB2BGR)
-    cv2.imwrite(grid_path, grid_image_bgr)
-
-    return grid_path
-
-def add_metadata(image_path, output_path, user_comment):
-    """
-    Adds a user comment to the EXIF metadata of an image.
-
-    Args:
-        image_path (str): Path to the input image.
-        output_path (str): Path to save the image with added metadata.
-        user_comment (str): Comment to add to the image's EXIF data.
-    """
-    image = Image.open(image_path)
-    exif_dict = piexif.load(image.info.get('exif', b''))
-
-    # Add user comment
-    exif_dict['Exif'][piexif.ExifIFD.UserComment] = piexif.helper.UserComment.dump(user_comment, encoding="unicode")
-
-    # Save image with new EXIF data
-    exif_bytes = piexif.dump(exif_dict)
-    image.save(output_path, "jpeg", exif=exif_bytes)
-
-def save_annotated_image(image_path, detections=None, destination_folder=None, logo_path="presentation/logo.png"):
-    """
-    Saves an annotated image with a logo overlay and formatted EXIF metadata.
-
-    Args:
-        image_path (str): Path to the input image.
-        detections (list of dict, optional): Detections to draw on the image.
-        destination_folder (str, optional): Directory to save the final image. Defaults to current working directory.
-        logo_path (str): Path to the logo image for branding.
-
-    Returns:
-        str: Path to the saved annotated image.
-    """
-    # Load the original image
-    image = cv2.imread(image_path)
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    # Draw bounding boxes if detections are provided
-    if detections:
-        image_rgb = draw_bboxes(image_rgb, detections, with_labels=True)
-
-    # Convert to PIL Image for easier manipulation
-    pil_image = Image.fromarray(image_rgb)
-
-    # Load the logo image
-    if os.path.exists(logo_path):
-        logo = Image.open(logo_path).convert("RGBA")
-        logo_width, logo_height = logo.size
-    else:
-        raise FileNotFoundError(f"Logo file not found at {logo_path}")
-
-    # Position the logo at the bottom-right corner with a margin
-    margin = 10
-    image_width, image_height = pil_image.size
-    logo_position = (image_width - logo_width - margin, image_height - logo_height - margin)
-
-    # Overlay the logo onto the image
-    pil_image.paste(logo, logo_position, logo)
-
-    # Extract EXIF metadata
-    exif_data = pil_image._getexif()
-    if exif_data:
-        exif = {ExifTags.TAGS.get(tag, tag): value for tag, value in exif_data.items()}
-    else:
-        exif = {}
-
-    # Format metadata as a console-style dictionary
-    metadata_str = "Metadata:\n" + "\n".join(f"{key}: {value}" for key, value in exif.items())
-
-    # Create a new image to append below the original for metadata
-    font = ImageFont.load_default()
-    text_size = font.getsize_multiline(metadata_str)
-    metadata_image = Image.new("RGB", (image_width, text_size[1] + margin), (255, 255, 255))
-    draw = ImageDraw.Draw(metadata_image)
-    draw.text((margin, margin // 2), metadata_str, font=font, fill=(0, 0, 0))
-
-    # Combine the original image with the metadata image
-    combined_image = Image.new("RGB", (image_width, image_height + metadata_image.height))
-    combined_image.paste(pil_image, (0, 0))
-    combined_image.paste(metadata_image, (0, image_height))
-
-    # Ensure the destination directory exists
-    if destination_folder is None:
-        destination_folder = os.getcwd()
-    os.makedirs(destination_folder, exist_ok=True)
-
-    # Save the final image
-    output_filename = os.path.basename(image_path)
-    output_path = os.path.join(destination_folder, output_filename)
-    combined_image.save(output_path)
-
-    return output_path
-
-def zip_results(results_folder, output_path=None):
-    """
-    Compresses inference results into a zip file.
-
-    Args:
-        results_folder (str): Path to the folder containing inference results.
-        output_path (str, optional): If provided, zip file will be saved here. Otherwise, it defaults to execution directory.
-
-    Returns:
-        str: Path to the generated zip file.
-    """
-    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    zip_filename = f"results_{timestamp}.zip"
-
-    if output_path is None:
-        output_path = os.getcwd()  # Default: Execution directory
-
-    zip_filepath = os.path.join(output_path, zip_filename)
-
-    shutil.make_archive(zip_filepath.replace('.zip', ''), 'zip', results_folder)
-    logging.info(f"✅ Results exported to {zip_filepath}")
-    return zip_filepath
-
-def compose_final_image(image_path, detections, logo_path="presentation/logo.png", output_folder="composed_results"):
-    """
-    Composes a final output image that integrates:
-    - The annotated image (using detections via draw_bboxes)
-    - A red vertical frame on the right (half the width of the original image)
-    - In the red area, the metadata (from EXIF) written in white with a console style font
-    - The logo placed at the bottom-right of the red area (dynamically resized)
-    """
-    # Create output folder if not exists
-    os.makedirs(output_folder, exist_ok=True)
+    Reads the detection results from the image's EXIF metadata.
     
-    # Read the image using cv2 and create an annotated copy
-    original_cv = cv2.imread(image_path)
-    if original_cv is None:
-        logging.error(f"Unable to load image: {image_path}")
+    Args:
+        image_path (str): Path to the image file to read
+        
+    Returns:
+        dict: Dictionary containing:
+            - orig_image: Original image
+            - annotated_image: Image with annotations
+            - cropped_detections: List of cropped detections
+            - metadata: Complete metadata dictionary
+            - status: Processing status
+            - dimensions: (Only for "stud" detection) Brick dimensions
+    """
+    metadata = read_exif(image_path)
+    orig_image = cv2.imread(image_path)
+    
+    if not orig_image is not None:
+        logger.error("❌ Failed to load image from path: %s", image_path)
         return None
-    annotated_cv = draw_bboxes(original_cv.copy(), detections, with_labels=True)
     
-    # Convert annotated image to PIL format (RGB)
-    annotated_img = Image.fromarray(cv2.cvtColor(annotated_cv, cv2.COLOR_BGR2RGB))
-    orig_width, orig_height = annotated_img.size
+    # Create a copy for annotation
+    annotated_image = orig_image.copy()
+    cropped_detections = []
+
+    # Check if metadata exists and has detection information
+    if not metadata:
+        logger.warning("⚠️ No EXIF metadata found in the image: %s", image_path)
+        return {
+            "orig_image": orig_image,
+            "annotated_image": orig_image,  # No annotations since no detections
+            "cropped_detections": [],
+            "metadata": {},
+            "status": "no_metadata"
+        }
+
+    if "boxes_coordinates" not in metadata or not metadata["boxes_coordinates"]:
+        logger.warning("⚠️ No detection information found in metadata for: %s", image_path)
+        return {
+            "orig_image": orig_image,
+            "annotated_image": orig_image,  # No annotations since no detections
+            "cropped_detections": [],
+            "metadata": metadata,
+            "status": "no_detections"
+        }
     
-    # Create a new canvas that is wider: original width + half of original width (red frame)
-    frame_width = orig_width // 2
-    new_width = orig_width + frame_width
-    new_image = Image.new("RGB", (new_width, orig_height), (255, 0, 0))  # red background
-    
-    # Paste the annotated image on left portion
-    new_image.paste(annotated_img, (0, 0))
-    
-    # Extract metadata from the original image (if exists)
-    pil_img = Image.open(image_path)
-    exif_data = pil_img._getexif()
-    metadata_str = ""
-    if exif_data:
-        for tag_id, value in exif_data.items():
-            tag = ExifTags.TAGS.get(tag_id, tag_id)
-            metadata_str += f"{tag}: {value}\n"
+    name = metadata.get("mode", "Label not found")
+    label = name[:-1] if name == 'bricks' else name
+
+    # Process valid metadata with detections
+    for key, box_info in metadata["boxes_coordinates"].items():
+        if isinstance(box_info, dict):
+            coords = box_info.get("coordinates", [])
+        elif isinstance(box_info, list):
+            coords = box_info
+        else:
+            coords = []
+
+        if len(coords) == 4:
+            x1, y1, x2, y2 = map(int, coords)
+            cv2.rectangle(annotated_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            
+            conf = f"{box_info.get('confidence', 0.0):.2f}"
+            # Reduce font size by half if label is "stud"
+            font_size = 0.25 if label == "stud" else 0.5
+            cv2.putText(annotated_image, f"{label} {conf}", (x1, y1-10),
+                        cv2.FONT_HERSHEY_SIMPLEX, font_size, (0, 255, 0), 2)
+            
+            crop = orig_image[y1:y2, x1:x2]
+            cropped_detections.append(crop) 
+            
+            logger.info(f"📦 Detected crop from coordinates: {coords}")
+        else:
+            logger.warning("⚠️ Invalid coordinates found in metadata: %s", coords)
+        
+        # at the bottom right of the image add "NO MODEL RAN"
+        text_position = (annotated_image.shape[1] - 150, annotated_image.shape[0] - 10)
+        cv2.putText(annotated_image, "NO MODEL RAN", text_position, 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        # TYPE the dimensions detected if the label is "stud"
+    if label == "stud":
+        dimension = metadata.get("dimension", "Dimensions not found")
+        # Position the dimension text at the top left of the image
+        text_position = (10, 20)
+        cv2.putText(annotated_image, f"{dimension}", text_position, 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+        logger.info(f"📏 Dimensions for 'stud': {dimension}")
+        return {
+            "orig_image": orig_image,
+            "annotated_image": annotated_image,
+            # "cropped_detections": cropped_detections,
+            "metadata": metadata,
+            "dimensions": dimension,
+            "status": "success"
+        }
     else:
-        metadata_str = "No metadata found."
+        return {
+            "orig_image": orig_image,
+            "annotated_image": annotated_image,
+            "cropped_detections": cropped_detections,
+            "metadata": metadata,
+            "status": "success"
+        }
+
+def clean_exif_metadata(image_path):
+    '''
+    Removes the info inside the UserComment tag of the EXIF metadata.
     
-    # Prepare to draw metadata text on the red frame area
-    draw = ImageDraw.Draw(new_image)
+    Args:
+        image_path (str): Path to the image file to clean
+        
+    Returns:
+        None
+        
+    Notes:
+        - Preserves other EXIF data, only removes UserComment content
+        - Useful for resetting processing history before new detection
+    '''
+    metadata = read_exif(image_path)
+    if metadata == {}:
+        logger.warning("⚠️ No metadata found in the image: %s", image_path)
+        return
     
-    # Try to load a monospaced (console style) font. This will use a default if not available.
+    #rewrite the image without UserComment tag
     try:
-        # Adjust font path as necessary for Windows; for example, 'Consola.ttf' from Consolas
-        font = ImageFont.truetype("consola.ttf", size=14)
-    except Exception:
-        font = ImageFont.load_default()
+        with Image.open(image_path) as image:
+            exif_bytes = image.info.get("exif")
+            if not exif_bytes:
+                logger.warning("⚠️ No EXIF data found in %s", image_path)
+                return
+            else:
+                exif_dict = piexif.load(exif_bytes)
+                exif_dict["Exif"][piexif.ExifIFD.UserComment] = b""
+                new_exif_bytes = piexif.dump(exif_dict)
+                image.save(image_path, exif=new_exif_bytes)
+                logger.info("✅ EXIF metadata cleaned from %s", image_path)
+    except Exception as e:
+        logger.error("❌ Failed to clean EXIF metadata from %s: %s", image_path, e)
     
-    # Define text area starting at orig_width with some margin
-    text_x = orig_width + 10
-    text_y = 10
-    # Set spacing and text color
-    text_color = (255, 255, 255)
-    # Draw the metadata text (wrap as needed manually, here we simply draw each line)
-    for line in metadata_str.splitlines():
-        draw.text((text_x, text_y), line, font=font, fill=text_color)
-        text_y += font.getsize(line)[1] + 2
+
+
+# =============================================================================
+# Brick Detection Function
+# =============================================================================
+
+def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder="", use_progress=True, force_rerun=False):
+    """
+    Performs brick detection using the provided YOLO model with rich progress display.
     
-    # Load and dynamically resize the logo to fit into red area: for example, width=30% of frame width
-    if os.path.exists(logo_path):
-        logo = Image.open(logo_path).convert("RGBA")
-        desired_logo_width = frame_width * 0.3
-        # maintain aspect ratio
-        logo_ratio = logo.height / logo.width
-        new_logo_size = (int(desired_logo_width), int(desired_logo_width * logo_ratio))
-        logo = logo.resize(new_logo_size, Image.ANTIALIAS)
-        # Compute position: bottom-right in red area with a small margin
-        margin = 10
-        logo_x = orig_width + frame_width - new_logo_size[0] - margin
-        logo_y = orig_height - new_logo_size[1] - margin
-        # Paste the logo (using its alpha as mask)
-        new_image.paste(logo, (logo_x, logo_y), logo)
+    Args:
+        image_input (Union[str, np.ndarray]): Either image path (str) or numpy array
+        model (YOLO, optional): YOLO model instance (uses default from config if None)
+        conf (float): Confidence threshold for detections (0.0-1.0)
+        save_json (bool): If True, saves detection metadata as JSON
+        save_annotated (bool): If True, saves annotated image
+        output_folder (str): Directory to save outputs to
+        use_progress (bool): Whether to use progress display
+        force_rerun (bool): If True, forces re-running detection even if cached results exist
+        
+    Returns:
+        dict: Dictionary containing:
+            - orig_image: Original image
+            - annotated_image: Image with annotations
+            - cropped_detections: List of cropped regions
+            - metadata: Complete metadata dictionary
+            - boxes: Detected bounding boxes
+            
+    Notes:
+        - Uses either provided model or loads default from config
+        - Shows real-time progress with rich display if available
+        - Saves outputs based on specified flags
+        - Can retrieve cached results from EXIF if available and force_rerun is False
+    """
+    # Define results at the beginning to ensure it exists
+    results = None
+    
+    # Check for cached detection if image_input is a file path and not forcing rerun
+    if isinstance(image_input, str) and not force_rerun:
+        cached_results = read_detection(image_input)
+        if cached_results and cached_results.get("status") == "success":
+            if "mode" in cached_results.get("metadata", {}) and cached_results["metadata"]["mode"] == "brick":
+                logger.info("📋 Using cached brick detection results from EXIF metadata.")
+                
+                # Return cached results but still save outputs if requested
+                if output_folder and save_annotated:
+                    annotated_image = cached_results.get("annotated_image")
+                    annotated_path = os.path.join(output_folder, "cached_brick_detection.jpg")
+                    os.makedirs(output_folder, exist_ok=True)
+                    cv2.imwrite(annotated_path, annotated_image)
+                    logger.info("💾 Cached annotated image saved at: %s", annotated_path)
+                    
+                return cached_results
+    
+    with console.status("[bold green]Loading image and model...") as status:
+        # Load model if not provided
+        if model is None:
+            model = config.get("LOADED_MODELS", {}).get("bricks")
+            if model is None:
+                logger.error("❌ No bricks model loaded.")
+                return None
+        
+        # Load image
+        if isinstance(image_input, str):
+            image = cv2.imread(image_input)
+            if image is None:
+                logger.error("❌ Failed to load image from path: %s", image_input)
+                return None
+        else:
+            image = image_input
+            
+        if not output_folder:
+            console.print("[yellow]⚠️ No output folder provided. Results will not be saved.[/]")
+        else:
+            os.makedirs(output_folder, exist_ok=True)
+        
+        status.update("[bold green]Running detection...")
+    
+    if use_progress:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TextColumn("[bold green]{task.completed}/{task.total}"),
+            TimeElapsedColumn()
+        ) as progress:
+            detection_task = progress.add_task("[green]Detecting bricks...", total=100)
+            
+            # Run detection
+            results = model.predict(source=image, conf=conf)
+            progress.update(detection_task, advance=50)
+            
+            metadata = extract_metadata_from_yolo_result(results, image_input)
+            # Set the mode explicitly to "brick" to distinguish the detection type
+            metadata["mode"] = "brick"
+            boxes_np = results[0].boxes.xyxy.cpu().numpy() if results and len(results) > 0 and results[0].boxes.xyxy is not None else np.array([])
+            annotated_image = results[0].plot(labels=True) if boxes_np.size > 0 else image.copy()
+            
+            cropped_detections = []
+            for box in boxes_np:
+                x1, y1, x2, y2 = map(int, box)
+                crop = image[y1:y2, x1:x2]
+                cropped_detections.append(crop)
+            
+            # Save outputs if requested and output_folder is provided
+            if output_folder:
+                if save_annotated:
+                    # Save the annotated image
+                    composite_path = os.path.join(output_folder, "composite_image.jpg")
+                    cv2.imwrite(composite_path, annotated_image)
+                    metadata["annotated_image_path"] = composite_path
+                    logger.info(f"💾 Saved annotated image to: {composite_path}")
+                    
+                if save_json:
+                    # Save metadata as JSON
+                    json_path = os.path.join(output_folder, "metadata.json")
+                    with open(json_path, 'w') as f:
+                        json.dump(metadata, f, indent=4)
+                    metadata["json_results_path"] = json_path
+                    logger.info(f"💾 Saved metadata to: {json_path}")
+                    
+            progress.update(detection_task, completed=100)
     else:
-        logging.warning(f"Logo file not found at {logo_path}")
+        # Run detection without progress display
+        results = model.predict(source=image, conf=conf)
+        metadata = extract_metadata_from_yolo_result(results, image_input)
+        # Set the mode explicitly to "brick" to distinguish the detection type
+        metadata["mode"] = "brick"
+        boxes_np = results[0].boxes.xyxy.cpu().numpy() if results and len(results) > 0 and results[0].boxes.xyxy is not None else np.array([])
+        annotated_image = results[0].plot(labels=True) if boxes_np.size > 0 else image.copy()
+        
+        cropped_detections = []
+        for box in boxes_np:
+            x1, y1, x2, y2 = map(int, box)
+            crop = image[y1:y2, x1:x2]
+            cropped_detections.append(crop)
+        
+        # Save outputs if requested and output_folder is provided
+        if output_folder:
+            if save_annotated:
+                # Save the annotated image
+                composite_path = os.path.join(output_folder, "composite_image.jpg")
+                cv2.imwrite(composite_path, annotated_image)
+                metadata["annotated_image_path"] = composite_path
+                logger.info(f"💾 Saved annotated image to: {composite_path}")
+                
+            if save_json:
+                # Save metadata as JSON
+                json_path = os.path.join(output_folder, "metadata.json")
+                with open(json_path, 'w') as f:
+                    json.dump(metadata, f, indent=4)
+                metadata["json_results_path"] = json_path
+                logger.info(f"💾 Saved metadata to: {json_path}")
     
-    # Save the composed image
-    output_filename = os.path.basename(image_path)
-    output_path = os.path.join(output_folder, output_filename)
-    new_image.save(output_path)
-    logging.info(f"✅ Final composed image saved to: {output_path}")
-    return output_path
+    # Check results safely after it's been defined
+    if results and len(results) > 0:
+        table = Table(title="Brick Detection Results")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+        table.add_row("Bricks detected", str(len(boxes_np)))
+        table.add_row("Confidence threshold", f"{conf:.2f}")
+        table.add_row("Processing time", f"{metadata['speed']['inference']:.3f}s")
+        
+        console.print(Panel(table, title="[bold]Detection Complete[/]", border_style="green"))
+    
+    try:
+        if isinstance(image_input, str):
+            # Always update EXIF for the original image file
+            write_exif(image_input, metadata)
+        
+        # Additionally update EXIF for annotated images if we're saving them
+        if save_annotated and metadata.get("annotated_image_path"):
+            write_exif(metadata["annotated_image_path"], metadata)
+    except Exception as e:
+        logger.error(f"❌ Failed to write EXIF metadata: {e}")
+        
+    return {
+        "orig_image": image,
+        "annotated_image": annotated_image,
+        "cropped_detections": cropped_detections,
+        "metadata": metadata,
+        "boxes": boxes_np,
+        "status": "success"  # Add status for consistency with read_detection
+    }
 
-def main():
+# =============================================================================
+# Stud Detection and Dimension Classification
+# =============================================================================
+
+def classify_dimensions(results, orig_image, dimension_map=config["STUDS_TO_DIMENSIONS_MAP"]):
     """
-    Main execution function for model inference and image composition.
+    Classifies the brick dimension based on detected stud positions.
+    
+    Args:
+        results (list): YOLO detection results for studs
+        orig_image (np.ndarray): Original image
+        dimension_map (dict, optional): Mapping from stud counts to brick dimensions
+        
+    Returns:
+        Union[str, dict]: Either:
+            - String with dimension classification (e.g., "2x4")
+            - Dictionary with dimension and annotated image for complex cases
+            
+    Notes:
+        - For simple cases, uses direct mapping from stud count to dimension
+        - For complex cases with multiple possibilities:
+          - Analyzes stud pattern using regression line
+          - Determines if studs are in line (Nx1) or rectangular (NxM) pattern
+          - Returns both dimension classification and visualization
     """
-    parser = argparse.ArgumentParser(description="LEGO Brick Classification & Detection")
-    parser.add_argument("--images", type=str, nargs='+', required=True, help="Paths to the input images")
-    parser.add_argument("--mode", type=str, choices=["bricks", "studs", "classify"], required=True, help="Select mode: 'bricks', 'studs', or 'classify'")
-    parser.add_argument("--batch-size", type=int, default=8, help="Number of images to process in a batch")
-    parser.add_argument("--save-annotated", action="store_true", help="Save annotated images")
-    parser.add_argument("--plt-annotated", action="store_true", help="Display annotated images")
-    parser.add_argument("--export-results", action="store_true", help="Export results as a zip file to execution directory")
+    studs = results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([])
     
-    args = parser.parse_args()
+    num_studs = len(studs)
+    valid_stud_counts = dimension_map.keys()
+    if num_studs not in valid_stud_counts:
+        logger.error(f"[ERROR] Deviant number of studs detected ({num_studs}). Returning 'Error'.")
+        return "Error"
+
+    if num_studs in valid_stud_counts and isinstance(dimension_map[num_studs], str):
+        logger.info(f"[INFO] Detected {num_studs} studs. Dimension: {dimension_map[num_studs]}.")
+        # type the dimension on the image
+        annotated_image = results[0].plot(labels=False)  # original_image.copy()
+        h, w = annotated_image.shape[:2]
+        text = f"{dimension_map[num_studs]}"
+        # Position in bottom right with margin
+        font_size = 0.5
+        text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_size, 2)[0]
+        text_x = w - text_size[0] - 10
+        text_y = h - 10
+        cv2.putText(annotated_image, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
+                    font_size, (0, 255, 0), 2)
+        return {
+            "dimension": dimension_map[num_studs],
+            "annotated_image": annotated_image
+        }
+    if num_studs in valid_stud_counts and isinstance(dimension_map[num_studs], list):
+        # Process centers and regression line:
+        centers = [((x1 + x2) / 2, (y1 + y2) / 2) for x1, y1, x2, y2 in studs]
+        box_sizes = [((x_max - x_min + y_max - y_min) / 2) for x_min, y_min, x_max, y_max in studs]
+        xs, ys = zip(*centers)
+        m, b = np.polyfit(xs, ys, 1)
+        deviations = [abs(y - (m * x + b)) for x, y in centers]
+        threshold = np.mean(box_sizes) / 2
+        classification_aux = "Nx1" if max(deviations) < threshold else "Nx2"
+        logger.info(f"[DEBUG] Detected {num_studs} studs. Classification: {classification_aux}.")
+        print(dimension_map[num_studs])
+        possible_dimensions = [dimension_map[num_studs][1] if classification_aux == "Nx1" else dimension_map[num_studs][0]]
+        logger.info(f"[INFO] Classification: {classification_aux}. Final dimension: {possible_dimensions[0]}.")
+
+        annotated_image = orig_image.copy()
+        for x, y in centers:
+            cv2.circle(annotated_image, (int(x), int(y)), 3, (0, 255, 0), -1)
+        x1 = 0
+        y1 = int(m * x1 + b)
+        x2 = annotated_image.shape[1]
+        y2 = int(m * x2 + b)
+        cv2.line(annotated_image, (x1, y1), (x2, y2), (255, 0, 0), 2)
+        
+        # Add dimension text in bottom right corner with half size
+        h, w = annotated_image.shape[:2]
+        text = f"{possible_dimensions[0]}"
+        font_size = 0.5
+        text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_size, 2)[0]
+        text_x = w - text_size[0] - 10
+        text_y = h - 10
+        cv2.putText(annotated_image, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
+                    font_size, (0, 255, 0), 2)
+
+        return {
+            "dimension": possible_dimensions[0],
+            "annotated_image": annotated_image
+        }
+
+def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, output_folder="", force_rerun=False):
+    """
+    Detects studs on LEGO bricks and classifies dimensions.
     
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler()]
-    )
+    Args:
+        image_input (Union[str, np.ndarray]): Either image path (str) or numpy array
+        model (YOLO, optional): YOLO model instance (uses default from config if None)
+        conf (float): Confidence threshold for detections (0.0-1.0)
+        save_annotated (bool): If True, saves annotated image
+        output_folder (str): Directory to save outputs to
+        force_rerun (bool): If True, forces re-running detection even if cached results exist
+        
+    Returns:
+        dict: Dictionary containing:
+            - orig_image: Original image
+            - annotated_image: Image with annotations
+            - dimension: Classified brick dimension (e.g., "2x4")
+            - metadata: Complete metadata dictionary
+            - status: Processing status
+            
+    Notes:
+        - Can retrieve cached results from EXIF if available and force_rerun is False
+        - Integrates with classify_dimensions for dimension determination
+        - Saves metadata to image EXIF data for future reference
+    """
+    # message if output folder is not provided
+    if not output_folder:
+        logger.warning("⚠️ No output folder provided. Results will not be saved.")
     
-    logging.info("🚀 Starting LEGO Brick Inference...")
+    # Check for cached detection if image_input is a file path and not forcing rerun
+    detection_results = None
+    if isinstance(image_input, str) and not force_rerun:
+        detection_results = read_detection(image_input)
+        if detection_results and detection_results.get("status") == "success":
+            if "mode" in detection_results.get("metadata", {}) and detection_results["metadata"]["mode"] == "stud":
+                logger.info("📋 Using cached stud detection results from EXIF metadata.")
+                
+                # Return cached results but still save outputs if requested
+                if output_folder and save_annotated:
+                    annotated_image = detection_results.get("annotated_image")
+                    annotated_path = os.path.join(output_folder, "cached_stud_detection.jpg")
+                    os.makedirs(output_folder, exist_ok=True)
+                    cv2.imwrite(annotated_path, annotated_image)
+                    logger.info("💾 Cached annotated image saved at: %s", annotated_path)
+                    
+                return detection_results
+
+    if model is None:
+        model = config.get("LOADED_MODELS", {}).get("studs")
+        if model is None:
+            logger.error("❌ No studs model loaded.")
+            return None
+
+    if isinstance(image_input, str):
+        image = cv2.imread(image_input)
+        if image is None:
+            logger.error("❌ Failed to load image from path: %s", image_input)
+            return None
+    else:
+        image = image_input
+
+    try:
+        orig_image = image.copy()
+        annotated_image = image.copy()
+        results = model.predict(source=image, conf=conf)
+        if isinstance(image_input, str):
+            results[0].path = image_input
+        boxes_np = (results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([]))
+        if boxes_np.size == 0:
+            logger.warning("⚠️ No detections found.")
+            return {
+                "orig_image": orig_image,
+                "annotated_image": annotated_image,
+                "dimension": "No studs detected",
+                "metadata": {},
+                "status": "no_detections"
+            }
+
+        annotated_image = results[0].plot(labels=False)
+
+        # Classify dimensions based on detected studs
+        dimension_info = classify_dimensions(results, orig_image)
+        dimension_result = dimension_info.get("dimension", "Unknown")
+        annotated_image = dimension_info.get("annotated_image", annotated_image)
+        metadata = extract_metadata_from_yolo_result(results, orig_image)
+        # Set the mode explicitly to "stud" to distinguish the detection type
+        metadata["mode"] = "stud"
+        metadata["dimension"] = dimension_result
+        
+    except Exception as e:
+        logger.error("❌ Error during studs detection: %s", e)
+        return None
+
+    # Create output folder if not provided
+    if not output_folder:
+        output_folder = os.path.join(os.getcwd(), "results", "studs")
+        os.makedirs(output_folder, exist_ok=True)   
+
+    try:
+        if isinstance(image_input, str):
+            # Always update EXIF for the original image file
+            write_exif(image_input, metadata)
+    except Exception as e:
+        logger.error(f"❌ Failed to write EXIF metadata: {e}")
     
-    # Load the model based on the provided mode
-    model = load_model(args.mode)
+    # Save annotated image if requested
+    if save_annotated:
+        # Create and save the annotated image
+        annotated_path = os.path.join(output_folder, "annotated_image.jpg")
+        cv2.imwrite(annotated_path, annotated_image)
+        metadata["annotated_image_path"] = annotated_path
+        logger.info("💾 Annotated image saved at: %s", annotated_path)
+        
+        # Also write EXIF to annotated image if we saved it
+        try:
+            write_exif(annotated_path, metadata)
+        except Exception as e:
+            logger.error(f"❌ Failed to write EXIF metadata to annotated image: {e}")
+
+    return {
+        "orig_image": orig_image,
+        "annotated_image": annotated_image,
+        "dimension": metadata.get("dimension", "Unknown"),
+        "metadata": metadata,
+        "status": "success"
+    }
+
+def run_full_algorithm(image_path, save_annotated=False, output_folder="", force_rerun=False, logo=config["LOGO_NUMPY"], external_progress=None):
+    """
+    Runs the full inference pipeline: brick detection, stud detection, and classification.
     
-    # Create a results folder inside cache (for annotated outputs, if not using composed images)
-    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    results_folder = os.path.join("cache/results", f"{args.mode}_{timestamp}")
-    os.makedirs(results_folder, exist_ok=True)
+    Args:
+        image_path (str): Path to the image file to process
+        save_annotated (bool): Whether to save annotated images to disk
+        output_folder (str): Path to save results (created if not exists)
+        force_rerun (bool): Force re-running detection even if cached results exist
+        logo (np.ndarray, optional): Logo image to add to the bottom of output
+        external_progress: Optional external progress context from CLI
+        
+    Returns:
+        dict: Dictionary containing:
+            - brick_results: Results from brick detection
+            - studs_results: Results from stud detection for each brick
+            - composite_image: Final annotated image with all results
+            
+    Notes:
+        - Creates a comprehensive composite image showing all stages
+        - Processes each detected brick independently for stud detection
+        - Handles cases with multiple bricks in a single image
+        - Supports external progress tracking for CLI integration
+        - Can use cached results if force_rerun is False
+    """
+    # handle empty output folder
+    if output_folder == "" and save_annotated:
+        output_folder = os.path.join(os.getcwd(), "tests", "test_results")
+        os.makedirs(output_folder, exist_ok=True)
+        logger.info("📂 Output folder not provided. Saving results in: %s", output_folder)
+
+    # If force_rerun is True, clean existing EXIF metadata
+    if force_rerun:
+        logger.info("🔄 Force rerun requested. Cleaning existing EXIF metadata.")
+        clean_exif_metadata(image_path)
+
+    # Load the image
+    image = cv2.imread(image_path)
+    if image is None:
+        logger.error("❌ Failed to load image from path: %s", image_path)
+        return None
+
+    # Use external progress if provided, otherwise create a new one
+    if external_progress:
+        # Use the provided progress context
+        brick_results = detect_bricks(
+            image_path,  # Use path for caching support
+            save_annotated=False, 
+            save_json=False, 
+            output_folder=output_folder,
+            use_progress=False,  # Don't create a new progress bar
+            force_rerun=force_rerun  # Pass force_rerun parameter
+        )
+    else:
+        # Create our own progress context
+        brick_results = detect_bricks(
+            image_path,  # Use path for caching support
+            save_annotated=False, 
+            save_json=False, 
+            output_folder=output_folder,
+            force_rerun=force_rerun  # Pass force_rerun parameter
+        )
+
+    if brick_results is None:
+        logger.error("❌ Error during brick detection.")
+        return None
+
+    # Get cropped detections from brick detection
+    cropped_detections = brick_results.get("cropped_detections", [])
+    logger.info(f"🔍 Found {len(cropped_detections)} cropped detections.")
+    studs_results = []
     
-    # Run inference to get detection results
-    results = predict(
-        image_paths=args.images,
-        model=model,
-        mode=args.mode,
-        batch_size=args.batch_size,
-        save_annotated=args.save_annotated,
-        plt_annotated=args.plt_annotated,
-        results_folder=results_folder
-    )
+    # Process each detected brick
+    if len(cropped_detections) > 1:
+        for idx, crop in enumerate(cropped_detections):
+            logger.info(f"🔍 Running studs detection on cropped detection number {idx + 1}.")
+            # Use numpy arrays directly for crops (no caching)
+            studs_result = detect_studs(crop, save_annotated=False, force_rerun=True)
+            if studs_result is None:
+                logger.error(f"❌ No studs detected in cropped detection number {idx + 1}.")
+                continue
+            studs_results.append(studs_result)
+            
+    elif len(cropped_detections) == 1:
+        logger.info(f"🔍 Running studs detection on single cropped detection.")
+        # Use numpy array directly for the crop (no caching)
+        studs_result = detect_studs(cropped_detections[0], save_annotated=False, force_rerun=True)
+        if studs_result is None:
+            logger.error("❌ No studs detected in the single cropped detection.")
+            return None
+        studs_results = [studs_result]
+    else:
+        logger.warning("⚠️ No brick detected. Running studs detection on the original image.")
+        studs_result = detect_studs(image_path, save_annotated=False, force_rerun=force_rerun)
+        if studs_result is None:
+            logger.error("❌ No studs detected in the original image.")
+            return None
+        studs_results = [studs_result]
+
+    logger.info(f"🔍 Found {len(studs_results)} valid studs results. Classifying dimensions...")
     
-    logging.info("✅ Inference complete.")
-    logging.info(json.dumps(results, indent=4))
+    # Create the composite image
+    base_image = brick_results.get("annotated_image")
     
-    # For every input image, compose final image with red frame and metadata
-    composed_folder = os.path.join("composed_results", f"{args.mode}_{timestamp}")
-    os.makedirs(composed_folder, exist_ok=True)
+    if len(studs_results) > 1:
+        # For multiple studs results, create a horizontal stack of all annotated studs images
+        annotated_studs_images = [result.get("annotated_image") for result in studs_results]
+        areas = [image.shape[0] * image.shape[1] for image in annotated_studs_images]
+        sorted_images = [image for _, image in sorted(zip(areas, annotated_studs_images), reverse=True)]
+        
+        # Resize all images to the same height
+        height = sorted_images[0].shape[0]
+        resized_images = [cv2.resize(image, (int(image.shape[1] * height / image.shape[0]), height)) 
+                         for image in sorted_images]
+        
+        # Stack images horizontally
+        studs_image = np.hstack(resized_images)
+        
+        # Resize studs image to match base image width
+        width_ratio = base_image.shape[1] / studs_image.shape[1]
+        new_width = base_image.shape[1]
+        new_height = int(studs_image.shape[0] * width_ratio)
+        studs_image = cv2.resize(studs_image, (new_width, new_height))
+        
+        # Stack base image and studs image vertically
+        composite_image = np.vstack((base_image, studs_image))
+    else:
+        # For a single studs result
+        if studs_results and len(studs_results) > 0:
+            studs_image = studs_results[0].get("annotated_image")
+            
+            # Resize studs image to match base image width
+            h, w = studs_image.shape[:2]
+            new_w = base_image.shape[1]
+            new_h = int(h * new_w / w)
+            resized_studs_image = cv2.resize(studs_image, (new_w, new_h))
+            
+            # Stack base image and studs image vertically
+            composite_image = np.vstack((base_image, resized_studs_image))
+        else:
+            logger.warning("⚠️ No valid studs results to create composite image.")
+            composite_image = base_image.copy()
     
-    for result in results:
-        image_path = result.get("image_path")
-        detections = result.get("detections", [])
-        compose_final_image(image_path, detections, logo_path="presentation/logo.png", output_folder=composed_folder)
+    # Add logo to the bottom if provided
+    if logo is not None:
+        # Resize logo to match the width of the composite image
+        logo_height, logo_width = logo.shape[:2]
+        composite_width = composite_image.shape[1]
+        aspect_ratio = logo_width / logo_height
+        new_logo_height = int(composite_width / aspect_ratio)
+        resized_logo = cv2.resize(logo, (composite_width, new_logo_height))
+        
+        # Convert to float for blending calculation
+        logo_float = resized_logo.astype(float)
+        
+        # Create a red background
+        background = np.zeros_like(logo_float)
+        background[:,:,2] = 255.0  # Red in BGR
+        
+        # Screen blend formula
+        blended_logo = 255 - ((255 - background) * (255 - logo_float) / 255)
+        blended_logo = blended_logo.astype(np.uint8)
+        
+        # Stack the blended logo below the composite image
+        composite_image = np.vstack((composite_image, blended_logo))
+    else:
+        logger.warning("⚠️ No logo available for the composite image.")
+
+    # Add a red margin to the composite image
+    composite_image = cv2.copyMakeBorder(composite_image, 10, 10, 10, 10,
+                                         cv2.BORDER_CONSTANT, value=(0, 0, 255))
     
-    # Zip results if requested
-    if args.export_results:
-        # Uncomment the next line if you wish to zip the results folder
-        zip_results(results_folder)
+    # Save annotated image if requested
+    if save_annotated:
+        annotated_path = os.path.join(output_folder, "fullyScannedImage.jpg")
+        cv2.imwrite(annotated_path, composite_image)
+        logger.info("💾 Annotated image saved at: %s", annotated_path)
+        
+        # Optional: Save metadata if needed
+        # combined_metadata = {
+        #    "brick_detection": brick_results.get("metadata", {}),
+        #    "stud_detection": [result.get("metadata", {}) for result in studs_results],
+        #    "timestamp": datetime.datetime.now().isoformat()
+        # }
+        # json_path = os.path.join(output_folder, "full_algorithm_results.json")
+        # with open(json_path, "w") as f:
+        #    json.dump(combined_metadata, f, indent=2)
+        # logger.info("💾 Results metadata saved at: %s", json_path)
+
+    return {
+        "brick_results": brick_results,
+        "studs_results": studs_results,
+        "composite_image": composite_image
+    }
 
 
-if __name__ == "__main__":  
-    main()
+
+# =============================================================================
+# End of Model Utils Module
+# =============================================================================

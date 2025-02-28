@@ -46,11 +46,11 @@ except ImportError:
     RICH_AVAILABLE = False
     print("Note: Install 'rich' package for enhanced output: pip install rich")
 
-# Import project modules
-from utils.model_utils import (
-    detect_bricks, detect_studs, run_full_algorithm, read_exif, 
-    write_exif, clean_exif_metadata, setup_utils
-)
+# Import project modules - Updated to use new modular structure
+from utils.config_utils import setup_utils, config
+from utils.detection_utils import detect_bricks, detect_studs
+from utils.pipeline_utils import run_full_algorithm, batch_process
+from utils.exif_utils import read_exif, write_exif, clean_exif_metadata
 import utils.data_utils as data_utils
 
 # Version information
@@ -69,9 +69,6 @@ logger = logging.getLogger(__name__)
 
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
-
-# Initialize configuration
-config = setup_utils(repo_download=False)
 
 def print_version(ctx, param, value):
     """Print version information and exit."""
