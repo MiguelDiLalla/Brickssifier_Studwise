@@ -692,13 +692,12 @@ def display_last_training_session(session_dir):
         elif file.lower().endswith(".yaml"):
             logging.info(f"📄 Displaying YAML file: {file}")
             try:
-                with open(file_path, 'r') as f):
+                with open(file_path, 'r') as f:
                     content = yaml.safe_load(f)
                 pprint(content)
+            except FileNotFoundError:
+                logging.error(f"File not found: {file_path}")
+            except yaml.YAMLError as e:
+                logging.error(f"Error parsing YAML file {file}: {e}")
             except Exception as e:
-                logging.error(f"Error reading YAML file {file}: {e}")
-
-        else:
-            logging.info(f"📄 Skipping unsupported file type: {file}")
-
-    logging.info("✅ Done displaying training session contents.")
+                logging.error(f"Error reading CSV file {file}: {e}")
