@@ -1,5 +1,5 @@
 import logging
-from train import setup_logging, export_logs
+from scripts.Legacy_scripts.train import setup_logging, export_logs
 
 def test_export_logs():
     # Setup logging

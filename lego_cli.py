@@ -449,7 +449,7 @@ def train_cmd(mode, epochs, batch_size, show_results, cleanup, force_extract, us
         console.print(Panel.fit(f"[bold blue]Training {mode.capitalize()} Detection Model[/bold blue]"))
         
     # Import train module functions dynamically to avoid circular imports
-    from train import (
+    from scripts.Legacy_scripts.train import (
         setup_logging, detect_hardware, setup_execution_structure,
         unzip_dataset, validate_dataset, split_dataset, 
         augment_data, select_model, train_model,
@@ -560,7 +560,7 @@ def train_cmd(mode, epochs, batch_size, show_results, cleanup, force_extract, us
     
     # Clean up if requested
     if cleanup:
-        from train import cleanup_after_training
+        from scripts.Legacy_scripts.train import cleanup_after_training
         if RICH_AVAILABLE:
             console.print("\n[yellow]Cleaning up temporary files...[/yellow]")
         else:
@@ -685,7 +685,7 @@ def visualize_cmd(input, labels, grid_size):
 def cleanup_cmd(all_files, logs_only, cache_only, results_only):
     """Clean up temporary files and directories."""
     # Import cleanup function from train module
-    from train import cleanup_after_training
+    from scripts.Legacy_scripts.train import cleanup_after_training
     
     # Define folders to clean
     to_clean = []
