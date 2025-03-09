@@ -34,11 +34,14 @@ build/
 dist/
 
 # ✅ Ignore results and test files
-results/
+results/*
+!results/.gitkeep
+cache/*
+!cache/.gitkeep
 output/
 # tests/
 notebooks/Legacy_notebooks
-cache/
+
 
 # ✅ Ignore IDE and editor-specific files
 .vscode/

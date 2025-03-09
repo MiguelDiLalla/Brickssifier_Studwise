@@ -209,7 +209,9 @@ def cleanup_training_sessions(repo_root):
                     shutil.rmtree(os.path.join(root, dir))
             logging.info(f"✅ Emptied: {folder_path}")
         else:
-            logging.warning(f"❌ Not found: {folder_path}")
+            logging.warning(f"❌ Not found: {folder_path}. Creating it now.")
+            os.makedirs(folder_path, exist_ok=True)
+            logging.info(f"✅ Created: {folder_path}")
 
 def export_logs(log_name="train_session"):
     """
