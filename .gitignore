@@ -37,7 +37,7 @@ dist/
 results/
 output/
 # tests/
-notebooks/
+notebooks/Legacy_notebooks
 cache/
 
 # ✅ Ignore IDE and editor-specific files

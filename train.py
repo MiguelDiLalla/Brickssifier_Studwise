@@ -35,6 +35,7 @@ import cv2
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import yaml
+import matplotlib.pyplot as plt
 from ultralytics import YOLO
 from pathlib import Path
 from IPython.display import FileLink, display
@@ -159,7 +160,7 @@ def detect_hardware():
     logging.warning("No GPU or MPS device detected. Falling back to CPU.")
     return "cpu"
 
-def setup_execution_structure():
+def setup_execution_structure(repo_root):
     """
     Ensures all necessary cache directories exist before execution.
     
@@ -170,7 +171,7 @@ def setup_execution_structure():
     Returns:
         None
     """
-    repo_root = get_repo_root()
+    
     required_dirs = [
         repo_root / "cache" / "datasets",
         repo_root / "cache" / "models",
@@ -181,7 +182,7 @@ def setup_execution_structure():
         directory.mkdir(parents=True, exist_ok=True)
     logging.info("✅ Execution structure initialized.")
 
-def cleanup_after_training():
+def cleanup_training_sessions(repo_root):
     """
     Cleans up temporary directories after training completion.
     
@@ -196,13 +197,17 @@ def cleanup_after_training():
         - Preserves original dataset files
         - Logs successful and failed cleanup operations
     """
-    repo_root = get_repo_root()
+    
     folders = ["cache", "results"]
     for folder in folders:
         folder_path = os.path.join(repo_root, folder)
         if os.path.exists(folder_path):
-            shutil.rmtree(folder_path)
-            logging.info(f"✅ Removed: {folder_path}")
+            for root, dirs, files in os.walk(folder_path):
+                for file in files:
+                    os.remove(os.path.join(root, file))
+                for dir in dirs:
+                    shutil.rmtree(os.path.join(root, dir))
+            logging.info(f"✅ Emptied: {folder_path}")
         else:
             logging.warning(f"❌ Not found: {folder_path}")
 
@@ -596,6 +601,10 @@ def dataset_split(mode, repo_root):
     with open(yaml_path, "w") as f:
         yaml.dump(dataset_yaml, f, default_flow_style=False)
 
+    # empty the original dataset folder and log the completion
+    shutil.rmtree(dataset_path)
+    logging.info(f"✅ Original dataset folder emptied: {dataset_path}")
+
     logging.info(f"✅ Dataset split completed. Updated dataset.yaml at {yaml_path}")
     logging.info(f"Dataset ready for training with class: {dataset_yaml['names'][0]}")
     return output_dir
@@ -762,6 +771,18 @@ def train_model(dataset_path, model_path, device, epochs, batch_size, repo_root)
     
     # Validate inputs
     dataset_yaml_path = os.path.join(dataset_path, "dataset.yaml")
+
+    # retrieve mode from yaml file
+    with open(dataset_yaml_path, 'r') as f:
+        dataset_config = yaml.safe_load(f)
+        mode = dataset_config["names"][0]
+        if mode == "lego_brick":
+            mode = "bricks"
+        elif mode == "lego_stud":
+            mode = "studs"
+        # log mode detected
+        logging.info(f"Mode detected: {mode} 🐯")
+
     if not os.path.exists(dataset_yaml_path):
         logging.error(f"❌ Dataset YAML not found: {dataset_yaml_path}")
         raise FileNotFoundError(f"Dataset YAML file not found: {dataset_yaml_path}")
@@ -803,7 +824,7 @@ def train_model(dataset_path, model_path, device, epochs, batch_size, repo_root)
     
     # Setup training outputs
     training_name = f"training_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    results_dir = os.path.join(repo_root, "results")
+    results_dir = os.path.join(repo_root, f"results/{mode}")
     os.makedirs(results_dir, exist_ok=True)
     
     logging.info(f"Project path: {results_dir} ✅")
@@ -916,19 +937,16 @@ def zip_and_download_results(results_dir=None, output_filename=None):
     # Provide a direct download link
     display(FileLink(zip_path))
 
+from rich.table import Table
+from rich.console import Console
+from rich.style import Style
+import matplotlib.gridspec as gridspec
+import numpy as np
+
 def display_last_training_session(session_dir):
     """
-    Displays all files from the specified training session directory.
-    
-    Args:
-        session_dir (str): Path to the training session folder.
-        
-    Returns:
-        None
-        
-    Notes:
-        - Handles various file types with appropriate visualization
-        - Displays images, tables, text files with proper formatting
+    Displays all files from the specified training session directory with organized grids
+    and rich formatting.
     """
     if not os.path.exists(session_dir):
         logging.error(f"Results directory not found: {session_dir}")
@@ -936,45 +954,98 @@ def display_last_training_session(session_dir):
 
     logging.info(f"Displaying training session: {session_dir}")
     files = sorted(os.listdir(session_dir))
-    import matplotlib.pyplot as plt
+    
+    # Group files by type
+    plot_files = [f for f in files if f.lower().endswith(('.jpg', '.png')) and 'batch' not in f]
+    batch_files = [f for f in files if 'batch' in f.lower() and f.lower().endswith(('.jpg', '.png'))]
+    csv_files = [f for f in files if f.lower().endswith('.csv')]
+    text_files = [f for f in files if f.lower().endswith('.txt')]
+    yaml_files = [f for f in files if f.lower().endswith('.yaml')]
 
-    for file in files:
-        file_path = os.path.join(session_dir, file)
-        if file.lower().endswith((".jpg", ".png")):
-            logging.info(f"🖼️  Displaying image: {file}")
+    # Display plots in a grid
+    if plot_files:
+        n_plots = len(plot_files)
+        n_cols = min(3, n_plots)
+        n_rows = (n_plots + n_cols - 1) // n_cols
+        
+        fig = plt.figure(figsize=(15, 5*n_rows))
+        gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+        
+        for idx, file in enumerate(plot_files):
+            file_path = os.path.join(session_dir, file)
             image = cv2.imread(file_path)
-            if image is None:
-                logging.warning(f"Unable to load image: {file_path}")
-                continue
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            plt.figure(figsize=(10, 10))
-            plt.imshow(image)
-            plt.axis("off")
-            display(plt.gcf())
-            plt.close()
+            if image is not None:
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                ax = fig.add_subplot(gs[idx//n_cols, idx%n_cols])
+                ax.imshow(image)
+                ax.set_title(file)
+                ax.axis('off')
+        
+        plt.tight_layout()
+        display(fig)
+        plt.close()
 
-        elif file.lower().endswith(".txt"):
-            logging.info(f"📄 Displaying text file: {file}")
-            with open(file_path, 'r') as f:
-                print(f.read())
+    # Display batch images in a grid
+    if batch_files:
+        n_batches = len(batch_files)
+        n_cols = min(4, n_batches)
+        n_rows = (n_batches + n_cols - 1) // n_cols
+        
+        fig = plt.figure(figsize=(15, 4*n_rows))
+        gs = gridspec.GridSpec(n_rows, n_cols, figure=fig)
+        
+        for idx, file in enumerate(batch_files):
+            file_path = os.path.join(session_dir, file)
+            image = cv2.imread(file_path)
+            if image is not None:
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                ax = fig.add_subplot(gs[idx//n_cols, idx%n_cols])
+                ax.imshow(image)
+                ax.set_title(f"Batch {idx+1}")
+                ax.axis('off')
+        
+        plt.suptitle("Training Batches", y=1.02, fontsize=16)
+        plt.tight_layout()
+        display(fig)
+        plt.close()
 
-        elif file.lower().endswith(".csv"):
-            logging.info(f"📄 Displaying CSV file: {file}")
-            try:
-                df = pd.read_csv(file_path)
-                display(df)
-            except Exception as e:
-                logging.error(f"Error reading CSV file {file}: {e}")
+    # Display CSV files with Rich formatting
+    console = Console()
+    for file in csv_files:
+        file_path = os.path.join(session_dir, file)
+        try:
+            df = pd.read_csv(file_path)
+            table = Table(title=f"\n📊 {file}", show_header=True, header_style="bold magenta")
+            
+            # Add columns
+            for column in df.columns:
+                table.add_column(column, justify="right", style="cyan")
+            
+            # Add rows with alternating colors
+            for idx, row in df.iterrows():
+                style = "dim" if idx % 2 == 0 else "none"
+                table.add_row(*[str(val) for val in row], style=style)
+            
+            console.print(table)
+            print("\n")  # Add spacing between tables
+            
+        except Exception as e:
+            logging.error(f"Error reading CSV file {file}: {e}")
 
-        elif file.lower().endswith(".yaml"):
-            logging.info(f"📄 Displaying YAML file: {file}")
-            try:
-                with open(file_path, 'r') as f:
-                    content = yaml.safe_load(f)
-                pprint(content)
-            except FileNotFoundError:
-                logging.error(f"File not found: {file_path}")
-            except yaml.YAMLError as e:
-                logging.error(f"Error parsing YAML file {file}: {e}")
-            except Exception as e:
-                logging.error(f"Error reading CSV file {file}: {e}")
+    # # Display text and YAML files
+    # for file in text_files + yaml_files:
+    #     file_path = os.path.join(session_dir, file)
+    #     try:
+    #         with open(file_path, 'r') as f:
+    #             content = f.read()
+    #             if file.lower().endswith('.yaml'):
+    #                 content = yaml.safe_load(f)
+    #             console.print(f"\n📄 {file}", style="bold blue")
+    #             console.print("─" * 80)
+    #             if isinstance(content, (dict, list)):
+    #                 console.print(content, style="yellow")
+    #             else:
+    #                 console.print(content)
+    #             console.print("─" * 80 + "\n")
+    #     except Exception as e:
+    #         logging.error(f"Error reading file {file}: {e}")
