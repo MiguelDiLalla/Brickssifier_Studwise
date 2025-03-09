@@ -21,6 +21,7 @@ import cv2
 import tempfile
 import shutil
 from pathlib import Path
+import random
 
 # Ensure the project root is in the Python path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -29,8 +30,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from utils.config_utils import config, setup_utils
 from utils.detection_utils import detect_bricks, detect_studs
 from utils.exif_utils import read_exif, write_exif, clean_exif_metadata
-from utils.classification_utils import classify_dimensions, analyze_stud_pattern
-from utils.visualization_utils import annotate_scanned_image, read_detection, create_composite_image
+from utils.classification_utils import classify_dimensions, analyze_stud_pattern, get_common_brick_dimensions
+from utils.visualization_utils import annotate_scanned_image, read_detection, create_composite_image, draw_detection_visualization
 from utils.pipeline_utils import run_full_algorithm, batch_process
 from utils.metadata_utils import extract_metadata_from_yolo_result
 
@@ -45,9 +46,6 @@ logger = logging.getLogger(__name__)
 TEST_IMAGES_DIR = Path(__file__).parent / "test_images"
 TEST_RESULTS_DIR = Path(__file__).parent / "test_results"
 
-# Create directories if they don't exist
-TEST_IMAGES_DIR.mkdir(exist_ok=True, parents=True)
-TEST_RESULTS_DIR.mkdir(exist_ok=True, parents=True)
 
 # Sample test image paths - replace with actual test images in your project
 BRICK_TEST_IMAGE = str(TEST_IMAGES_DIR / "brick_test.jpg")
@@ -263,17 +261,18 @@ class TestClassificationUtils(unittest.TestCase):
 class TestDetectionUtils(unittest.TestCase):
     """Tests for detection utilities."""
     
-    @unittest.skipIf(not os.path.exists(BRICK_TEST_IMAGE), "Test image not available")
+    def setUp(self):
+        """Set up test environment."""
+        self.brick_test_image = get_random_test_image(BRICKS_TEST_DIR)
+        self.stud_test_image = get_random_test_image(STUDS_TEST_DIR)
+    
+    @unittest.skipIf(not os.path.exists(str(BRICKS_TEST_DIR)), "Test images directory not available")
     def test_detect_bricks(self):
         """Test basic brick detection functionality."""
-        # This is a lightweight test that just checks the API works
-        # Skip actual model inference to avoid dependencies
-        
-        # Check that the function returns expected structure without errors
         try:
             result = detect_bricks(
-                BRICK_TEST_IMAGE, 
-                model=None,  # Will use default if available, or return None
+                self.brick_test_image, 
+                model=None,
                 conf=0.25, 
                 save_annotated=False
             )
@@ -283,14 +282,15 @@ class TestDetectionUtils(unittest.TestCase):
                 self.assertIn("annotated_image", result)
                 self.assertIn("cropped_detections", result)
                 self.assertIn("metadata", result)
-                self.assertIn("boxes", result)
+                # Check boxes_coordinates instead of boxes
+                self.assertIn("boxes_coordinates", result["metadata"])
                 self.assertIn("status", result)
         except Exception as e:
             # If model is not available, this should be skipped without failing
             if "No bricks model loaded" not in str(e):
                 self.fail(f"detect_bricks raised unexpected exception: {e}")
     
-    @unittest.skipIf(not os.path.exists(STUD_TEST_IMAGE), "Test image not available")
+    @unittest.skipIf(not os.path.exists(str(STUDS_TEST_DIR)), "Test images directory not available")
     def test_detect_studs(self):
         """Test basic stud detection functionality."""
         # This is a lightweight test that just checks the API works
@@ -298,8 +298,8 @@ class TestDetectionUtils(unittest.TestCase):
         
         try:
             result = detect_studs(
-                STUD_TEST_IMAGE, 
-                model=None,  # Will use default if available, or return None
+                self.stud_test_image, 
+                model=None,
                 conf=0.25, 
                 save_annotated=False
             )
@@ -319,7 +319,13 @@ class TestDetectionUtils(unittest.TestCase):
 class TestPipelineUtils(unittest.TestCase):
     """Tests for pipeline utilities."""
     
-    @unittest.skipIf(not os.path.exists(BRICK_TEST_IMAGE), "Test image not available")
+    def setUp(self):
+        """Set up test environment."""
+        self.output_dir = os.path.join(TEST_RESULTS_DIR, "integration")
+        os.makedirs(self.output_dir, exist_ok=True)
+        self.brick_test_image = get_random_test_image(BRICKS_TEST_DIR)
+    
+    @unittest.skipIf(not os.path.exists(str(BRICKS_TEST_DIR)), "Test images directory not available")
     def test_run_full_algorithm(self):
         """Test the full algorithm pipeline."""
         # This test checks that the function runs without errors
@@ -327,7 +333,7 @@ class TestPipelineUtils(unittest.TestCase):
         
         try:
             result = run_full_algorithm(
-                BRICK_TEST_IMAGE,
+                self.brick_test_image,
                 save_annotated=False,
                 force_rerun=True
             )
@@ -349,8 +355,9 @@ class TestIntegration(unittest.TestCase):
         """Set up test environment."""
         self.output_dir = os.path.join(TEST_RESULTS_DIR, "integration")
         os.makedirs(self.output_dir, exist_ok=True)
+        self.brick_test_image = get_random_test_image(BRICKS_TEST_DIR)
     
-    @unittest.skipIf(not os.path.exists(BRICK_TEST_IMAGE), "Test image not available")
+    @unittest.skipIf(not os.path.exists(str(BRICKS_TEST_DIR)), "Test images directory not available")
     def test_end_to_end_workflow(self):
         """Test the end-to-end workflow from brick detection to dimension classification."""
         # This is a minimal integration test to verify components work together
@@ -358,7 +365,7 @@ class TestIntegration(unittest.TestCase):
         try:
             # Step 1: Detect bricks
             brick_result = detect_bricks(
-                BRICK_TEST_IMAGE, 
+                self.brick_test_image, 
                 save_annotated=True,
                 save_json=True,
                 output_folder=self.output_dir,

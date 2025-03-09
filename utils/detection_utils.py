@@ -32,6 +32,7 @@ logger.info("🚀 Detection Utils module loaded.")
 from utils.config_utils import config
 from utils.metadata_utils import extract_metadata_from_yolo_result
 from utils.exif_utils import write_exif, read_exif
+from utils.visualization_utils import read_detection  # Add this line
 
 # Import rich utilities if available
 try:
@@ -371,3 +372,17 @@ class nullcontext:
     
     def update(self, *args, **kwargs):
         pass
+
+def display_results_table(title: str, results: list) -> None:
+    """Display detection results in a formatted table.
+    
+    Args:
+        title: Title for the results table
+        results: List of detection results to display
+    """
+    logger = logging.getLogger(__name__)
+    logger.info(f"\n{title}")
+    logger.info("-" * 50)
+    for result in results:
+        logger.info(result)
+    logger.info("-" * 50)

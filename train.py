@@ -911,28 +911,28 @@ def zip_and_download_results(results_dir=None, output_filename=None):
         
     Returns:
         None
-        
-    Notes:
-        - Copies logs folder to results before compression
-        - Creates and displays downloadable link in Jupyter environments
     """
     if results_dir is None:
         results_dir = os.path.join(os.getcwd(), "results")
     if output_filename is None:
         output_filename = os.path.join(os.getcwd(), "..", "training_results.zip")
-    
+
+    # Convert Path object to string if needed
+    if hasattr(output_filename, '__fspath__'):
+        output_filename = str(output_filename)
 
     # First copy the logs folder to the results folder
     log_src = os.path.join(os.getcwd(), "logs")
     log_dst = os.path.join(results_dir, "logs")
-    shutil.copytree(log_src, log_dst)   
+    shutil.copytree(log_src, log_dst, dirs_exist_ok=True)   
 
     if not os.path.exists(results_dir):
         logging.error("❌ No results folder found.")
         return
 
-    # Create ZIP file
-    zip_path = shutil.make_archive(output_filename.replace(".zip", ""), 'zip', results_dir)
+    # Create ZIP file using string paths
+    base_filename = output_filename.replace(".zip", "")
+    zip_path = shutil.make_archive(base_filename, 'zip', results_dir)
     
     logging.info(f"✅ Training results compressed: {zip_path}")
 

@@ -1,3 +1,24 @@
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.console import Console
+
+RICH_AVAILABLE = True
+console = Console()
+
+def create_progress():
+    """Creates and returns a Rich progress bar with custom formatting.
+    
+    Returns:
+        Progress: Configured Rich progress bar with spinner, bar, and time tracking
+    """
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        transient=True
+    )
+
 class ProgressContext:
     """Context manager for tracking progress of operations.
     

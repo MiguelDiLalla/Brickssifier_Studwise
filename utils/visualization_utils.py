@@ -27,6 +27,8 @@ logger.info("🚀 Visualization Utils module loaded.")
 # Import project modules
 from utils.config_utils import config
 from utils.exif_utils import read_exif
+from rich.table import Table
+from rich.console import Console
 
 def annotate_scanned_image(image_path):
     """
@@ -347,3 +349,41 @@ def draw_detection_visualization(image, boxes, class_names=None, confidence_scor
                        (0, 0, 0), thickness)
     
     return annotated
+
+def display_results_table(brick_results, studs_results):
+    """
+    Displays a formatted table of detection results using Rich.
+    
+    Args:
+        brick_results (dict): Results from brick detection containing cropped_detections
+        studs_results (list): List of results from stud detection per brick
+    """
+    console = Console()
+    table = Table(show_header=True, header_style="bold magenta")
+    
+    # Add columns
+    table.add_column("Detection Type", style="dim")
+    table.add_column("Count")
+    table.add_column("Details")
+    
+    # Add brick detection results
+    brick_count = len(brick_results.get("cropped_detections", []))
+    table.add_row(
+        "Bricks",
+        str(brick_count),
+        "Confidence scores available in brick_results"
+    )
+    
+    # Add stud detection results
+    total_studs = sum(len(result.get("boxes", [])) for result in studs_results)
+    stud_details = [
+        f"Brick {i+1}: {len(result.get('boxes', []))} studs" 
+        for i, result in enumerate(studs_results)
+    ]
+    table.add_row(
+        "Studs",
+        str(total_studs),
+        "\n".join(stud_details)
+    )
+    
+    console.print(table)
