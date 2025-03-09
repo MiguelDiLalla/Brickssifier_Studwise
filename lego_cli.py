@@ -99,6 +99,18 @@ def cli(debug):
 
     This tool provides commands for detecting LEGO bricks, classifying their dimensions,
     training models, and processing datasets.
+
+    Inference Arguments:
+      For detection and inference commands (detect-bricks, detect-studs, infer):
+      --image    Path to input image or directory containing images (jpg/png)
+      --output   Directory to save results (created if not exists)
+      --conf     Confidence threshold for detections (0.0-1.0)
+
+    Common Options:
+      --save-annotated   Save images with detection visualizations
+      --save-json       Save detection results in JSON format
+      --clean-exif      Clean EXIF metadata before processing
+      --force-run       Force re-run detection (ignore cached results)
     """
     # Set debug level if requested
     if debug:
@@ -123,6 +135,17 @@ def detect_bricks_cmd(image, output, conf, save_annotated, save_json, clean_exif
     
     This command runs the brick detection model on the specified image(s)
     and saves the results.
+
+    Arguments:
+        --image PATH          Input image or directory [required]
+        --output PATH        Output directory (default: ./results/brick_detection)
+        --conf FLOAT         Detection confidence threshold (default: 0.25)
+        --save-annotated     Save visualization of detections (default: True)
+        --save-json         Save detection results as JSON (default: False)
+        --clean-exif        Remove EXIF metadata before processing (default: False)
+
+    Example:
+        lego_cli.py detect-bricks --image photos/test.jpg --conf 0.3 --save-json
     """
     if RICH_AVAILABLE:
         console.print(Panel.fit("[bold blue]LEGO Brick Detection[/bold blue]"))
@@ -685,7 +708,7 @@ def visualize_cmd(input, labels, grid_size):
 def cleanup_cmd(all_files, logs_only, cache_only, results_only):
     """Clean up temporary files and directories."""
     # Import cleanup function from train module
-    from train import cleanup_after_training
+    # from train import cleanup_after_training
     
     # Define folders to clean
     to_clean = []
@@ -702,7 +725,7 @@ def cleanup_cmd(all_files, logs_only, cache_only, results_only):
         to_clean = ["cache", "logs"]
     
     if RICH_AVAILABLE:
-        console.print(Panel.fit("[bold yellow]Cleaning Up Temporary Files[/bold yellow]"))
+        console.print(Panel.fit("[bold yellow]Cleaning Up Folder Contents[/bold yellow]"))
         
         # Display what will be cleaned
         table = Table(title="Folders to Clean")
@@ -712,9 +735,9 @@ def cleanup_cmd(all_files, logs_only, cache_only, results_only):
         for folder in to_clean:
             folder_path = os.path.join(os.getcwd(), folder)
             if os.path.exists(folder_path):
-                table.add_row(folder, "Will be removed")
+                table.add_row(folder, "Will be emptied")
             else:
-                table.add_row(folder, "Not found")
+                table.add_row(folder, "Will be created empty")
                 
         console.print(table)
         
@@ -723,12 +746,23 @@ def cleanup_cmd(all_files, logs_only, cache_only, results_only):
             with console.status("[bold green]Cleaning up..."):
                 for folder in to_clean:
                     folder_path = os.path.join(os.getcwd(), folder)
-                    if os.path.exists(folder_path):
-                        import shutil
-                        shutil.rmtree(folder_path)
-                        console.print(f"[green]✓[/green] Removed {folder}")
-                    else:
-                        console.print(f"[yellow]⚠[/yellow] {folder} not found")
+                    
+                    # Create folder if it doesn't exist
+                    os.makedirs(folder_path, exist_ok=True)
+                    
+                    # Remove all contents but keep folder
+                    for item in os.listdir(folder_path):
+                        item_path = os.path.join(folder_path, item)
+                        try:
+                            if os.path.isfile(item_path):
+                                os.unlink(item_path)
+                            elif os.path.isdir(item_path):
+                                import shutil
+                                shutil.rmtree(item_path)
+                        except Exception as e:
+                            console.print(f"[red]Error removing {item}: {e}[/red]")
+                    
+                    console.print(f"[green]✓[/green] Emptied {folder}")
             console.print("[bold green]Cleanup completed![/bold green]")
         else:
             console.print("[yellow]Cleanup cancelled.[/yellow]")
@@ -737,19 +771,30 @@ def cleanup_cmd(all_files, logs_only, cache_only, results_only):
         for folder in to_clean:
             folder_path = os.path.join(os.getcwd(), folder)
             if os.path.exists(folder_path):
-                click.echo(f"Will remove: {folder}")
+                click.echo(f"Will empty: {folder}")
             else:
-                click.echo(f"Not found: {folder}")
+                click.echo(f"Will create empty: {folder}")
                 
         if click.confirm("Do you want to proceed with cleanup?", default=True):
             for folder in to_clean:
                 folder_path = os.path.join(os.getcwd(), folder)
-                if os.path.exists(folder_path):
-                    import shutil
-                    shutil.rmtree(folder_path)
-                    click.echo(f"Removed {folder}")
-                else:
-                    click.echo(f"{folder} not found")
+                
+                # Create folder if it doesn't exist
+                os.makedirs(folder_path, exist_ok=True)
+                
+                # Remove all contents but keep folder
+                for item in os.listdir(folder_path):
+                    item_path = os.path.join(folder_path, item)
+                    try:
+                        if os.path.isfile(item_path):
+                            os.unlink(item_path)
+                        elif os.path.isdir(item_path):
+                            import shutil
+                            shutil.rmtree(item_path)
+                    except Exception as e:
+                        click.echo(f"Error removing {item}: {e}")
+                
+                click.echo(f"Emptied {folder}")
             click.echo("Cleanup completed!")
         else:
             click.echo("Cleanup cancelled.")
