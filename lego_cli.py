@@ -707,10 +707,6 @@ def visualize_cmd(input, labels, grid_size):
 @click.option('--results-only', is_flag=True, help='Clean only results files.')
 def cleanup_cmd(all_files, logs_only, cache_only, results_only):
     """Clean up temporary files and directories."""
-    # Import cleanup function from train module
-    # from train import cleanup_after_training
-    
-    # Define folders to clean
     to_clean = []
     
     if all_files or logs_only:
@@ -723,6 +719,30 @@ def cleanup_cmd(all_files, logs_only, cache_only, results_only):
     if not to_clean:
         # Default behavior
         to_clean = ["cache", "logs"]
+
+    def clean_folder(folder_path):
+        """Helper function to clean a folder safely"""
+        try:
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
+                return True
+            
+            # Remove all contents but keep folder
+            for item in os.listdir(folder_path):
+                item_path = os.path.join(folder_path, item)
+                try:
+                    if os.path.isfile(item_path)):
+                        os.unlink(item_path)
+                    elif os.path.isdir(item_path):
+                        import shutil
+                        shutil.rmtree(item_path)
+                except Exception as e:
+                    logger.error(f"Error removing {item}: {e}")
+                    return False
+            return True
+        except Exception as e:
+            logger.error(f"Error handling folder {folder_path}: {e}")
+            return False
     
     if RICH_AVAILABLE:
         console.print(Panel.fit("[bold yellow]Cleaning Up Folder Contents[/bold yellow]"))
@@ -737,33 +757,26 @@ def cleanup_cmd(all_files, logs_only, cache_only, results_only):
             if os.path.exists(folder_path):
                 table.add_row(folder, "Will be emptied")
             else:
-                table.add_row(folder, "Will be created empty")
+                table.add_row(folder, "Will be created")
                 
         console.print(table)
         
         # Confirm cleanup
         if click.confirm("Do you want to proceed with cleanup?", default=True):
-            with console.status("[bold green]Cleaning up..."):
+            with console.status("[bold green]Cleaning up...") as status:
+                success = True
                 for folder in to_clean:
                     folder_path = os.path.join(os.getcwd(), folder)
-                    
-                    # Create folder if it doesn't exist
-                    os.makedirs(folder_path, exist_ok=True)
-                    
-                    # Remove all contents but keep folder
-                    for item in os.listdir(folder_path):
-                        item_path = os.path.join(folder_path, item)
-                        try:
-                            if os.path.isfile(item_path):
-                                os.unlink(item_path)
-                            elif os.path.isdir(item_path):
-                                import shutil
-                                shutil.rmtree(item_path)
-                        except Exception as e:
-                            console.print(f"[red]Error removing {item}: {e}[/red]")
-                    
-                    console.print(f"[green]✓[/green] Emptied {folder}")
-            console.print("[bold green]Cleanup completed![/bold green]")
+                    if clean_folder(folder_path):
+                        console.print(f"[green]✓[/green] Processed {folder}")
+                    else:
+                        console.print(f"[red]✗[/red] Failed to process {folder}")
+                        success = False
+                
+                if success:
+                    console.print("[bold green]Cleanup completed successfully![/bold green]")
+                else:
+                    console.print("[bold yellow]Cleanup completed with some errors.[/bold yellow]")
         else:
             console.print("[yellow]Cleanup cancelled.[/yellow]")
     else:
@@ -773,29 +786,22 @@ def cleanup_cmd(all_files, logs_only, cache_only, results_only):
             if os.path.exists(folder_path):
                 click.echo(f"Will empty: {folder}")
             else:
-                click.echo(f"Will create empty: {folder}")
+                click.echo(f"Will create: {folder}")
                 
         if click.confirm("Do you want to proceed with cleanup?", default=True):
+            success = True
             for folder in to_clean:
                 folder_path = os.path.join(os.getcwd(), folder)
-                
-                # Create folder if it doesn't exist
-                os.makedirs(folder_path, exist_ok=True)
-                
-                # Remove all contents but keep folder
-                for item in os.listdir(folder_path):
-                    item_path = os.path.join(folder_path, item)
-                    try:
-                        if os.path.isfile(item_path):
-                            os.unlink(item_path)
-                        elif os.path.isdir(item_path):
-                            import shutil
-                            shutil.rmtree(item_path)
-                    except Exception as e:
-                        click.echo(f"Error removing {item}: {e}")
-                
-                click.echo(f"Emptied {folder}")
-            click.echo("Cleanup completed!")
+                if clean_folder(folder_path):
+                    click.echo(f"Processed {folder}")
+                else:
+                    click.echo(f"Failed to process {folder}")
+                    success = False
+            
+            if success:
+                click.echo("Cleanup completed successfully!")
+            else:
+                click.echo("Cleanup completed with some errors.")
         else:
             click.echo("Cleanup cancelled.")
 
