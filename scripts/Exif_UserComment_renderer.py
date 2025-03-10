@@ -20,135 +20,109 @@ import tkinter as tk
 from tkinter import scrolledtext, messagebox
 import tkinter.font as tkFont
 from PIL import Image, ImageTk
-import piexif
 
 # Add the parent directory to the path so we can import the utils module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-try:
-    from scripts.Legacy_scripts.model_utils import read_exif
-    IMPORT_SUCCESS = True
-except ImportError:
-    IMPORT_SUCCESS = False
-    print("Warning: Couldn't import read_exif from utils.model_utils")
-    print("Will use local implementation instead")
+from utils import exif_utils
 
-    # Local implementation of read_exif if import fails
-    def read_exif(image_path, TREE=None):
-        """Local implementation of read_exif for standalone use"""
-        if TREE is None:
-            TREE = {
-                "boxes_coordinates": {},
-                "orig_shape": [0, 0],
-                "speed": {
-                    "preprocess": 0.0,
-                    "inference": 0.0,
-                    "postprocess": 0.0
-                },
-                "mode": "",
-                "path": "",
-                "os_full_version_name": "",
-                "processor": "",
-                "architecture": "",
-                "hostname": "",
-                "timestamp": "",
-                "annotated_image_path": "",
-                "json_results_path": "",
-                "TimesScanned": 0,
-                "Repository": "",
-                "message": ""
-            }
-        
-        try:
-            with Image.open(image_path) as image:
-                exif_bytes = image.info.get("exif")
-                if not exif_bytes:
-                    print(f"⚠️ No EXIF data found in {image_path}")
-                    return {}
-
-                exif_dict = piexif.load(exif_bytes)
-        except Exception as e:
-            print(f"❌ Failed to open image {image_path} > {e}")
-            return {}
-
-        user_comment_tag = piexif.ExifIFD.UserComment
-        user_comment = exif_dict.get("Exif", {}).get(user_comment_tag, b"")
-        if not user_comment:
-            print(f"⚠️ No UserComment tag found in {image_path}")
-            return {}
-
-        try:
-            comment_str = user_comment.decode('utf-8', errors='ignore')
-            metadata = json.loads(comment_str)
-            # Ensure defaults from TREE are present
-            for key, default in TREE.items():
-                metadata.setdefault(key, default)
-            times = metadata.get("TimesScanned", 0)
-            if times:
-                print(f"🔄 Image {image_path} has been scanned {times} time(s)")
-            else:
-                print(f"🆕 Image {image_path} has not been scanned before")
-            return metadata
-        except Exception as e:
-            print(f"❌ Failed to parse EXIF metadata from {image_path}: {e}")
-            return {}
-
+# Add modern theme constants
+THEME = {
+    'bg_dark': '#1E1E1E',
+    'bg_medium': '#252526',
+    'bg_light': '#2D2D2D',
+    'text': '#FFFFFF',
+    'accent': '#007ACC',
+    'border': '#3E3E42',
+    'padding': 12
+}
 
 class ExifUserCommentRenderer:
     def __init__(self, root):
         self.root = root
-        self.root.title("EXIF UserComment Renderer")
-        self.root.geometry("800x600")
-        self.root.configure(bg='#2d2d2d')
+        self.root.title("EXIF Viewer")
+        self.root.geometry("900x700")
+        self.root.configure(bg=THEME['bg_dark'])
         
-        # Configure the main window
+        # Configure grid weights
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(1, weight=1)
+        
         self.setup_ui()
         self.setup_drop_target()
-        
-        # Initialize variables
         self.current_image_path = None
-        self.photo_image = None  # Keep reference to prevent garbage collection
+        self.photo_image = None
         
     def setup_ui(self):
-        # Create header
-        header_frame = tk.Frame(self.root, bg="#1a1a1a")
-        header_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Header with minimal design
+        title_font = tkFont.Font(family="Segoe UI", size=14, weight="normal")
+        title = tk.Label(self.root, text="EXIF Metadata Viewer", 
+                        font=title_font, bg=THEME['bg_dark'], 
+                        fg=THEME['text'], pady=THEME['padding'])
+        title.grid(row=0, column=0, sticky='ew')
         
-        title_font = tkFont.Font(family="Arial", size=16, weight="bold")
-        title = tk.Label(header_frame, text="EXIF UserComment Renderer", 
-                         font=title_font, bg="#1a1a1a", fg="white")
-        title.pack(pady=5)
+        # Main container frame
+        container = tk.Frame(self.root, bg=THEME['bg_dark'])
+        container.grid(row=1, column=0, sticky='nsew', padx=THEME['padding'], 
+                      pady=THEME['padding'])
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(1, weight=1)
         
-        # Create main frame with image area and metadata area
-        main_frame = tk.Frame(self.root, bg='#2d2d2d')
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # Image area with rounded corners effect
+        self.image_frame = tk.Frame(container, bg=THEME['bg_medium'],
+                                  highlightbackground=THEME['border'],
+                                  highlightthickness=1)
+        self.image_frame.grid(row=0, column=0, sticky='nsew', 
+                            pady=(0, THEME['padding']))
         
-        # Image area
-        self.image_frame = tk.Frame(main_frame, bg='#2d2d2d')
-        self.image_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.image_label = tk.Label(self.image_frame, bg=THEME['bg_medium'],
+                                  text="Drop image here",
+                                  fg=THEME['text'], height=8)
+        self.image_label.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         
-        self.image_label = tk.Label(self.image_frame, bg='#3d3d3d', 
-                                   text="Drag and drop an image file here", 
-                                   fg="white", height=10)
-        self.image_label.pack(fill=tk.BOTH, expand=True)
+        # Metadata area with custom styling
+        metadata_container = tk.Frame(container, bg=THEME['bg_medium'],
+                                    highlightbackground=THEME['border'],
+                                    highlightthickness=1)
+        metadata_container.grid(row=1, column=0, sticky='nsew')
         
-        # Metadata area with scrolled text
-        metadata_frame = tk.Frame(main_frame, bg='#2d2d2d')
-        metadata_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        metadata_label = tk.Label(metadata_frame, text="EXIF UserComment Data:", 
-                                 bg='#2d2d2d', fg="white", anchor="w")
-        metadata_label.pack(fill=tk.X)
-        
-        self.metadata_text = scrolledtext.ScrolledText(metadata_frame, bg='black', 
-                                                      fg='white', height=15,
-                                                      font=("Consolas", 10))
+        # Use a modern monospace font
+        self.metadata_text = scrolledtext.ScrolledText(
+            metadata_container,
+            bg=THEME['bg_light'],
+            fg=THEME['text'],
+            font=("Cascadia Code", 10),
+            wrap=tk.NONE,
+            borderwidth=0,
+            highlightthickness=0,
+            padx=THEME['padding'],
+            pady=THEME['padding']
+        )
         self.metadata_text.pack(fill=tk.BOTH, expand=True)
         
-        # Status bar
-        self.status_bar = tk.Label(self.root, text="Ready - Drop an image file", 
-                                  bd=1, relief=tk.SUNKEN, anchor=tk.W, 
-                                  bg="#1a1a1a", fg="white")
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        # Minimal status bar
+        self.status_bar = tk.Label(
+            self.root,
+            text="Ready",
+            bg=THEME['bg_medium'],
+            fg=THEME['text'],
+            anchor=tk.W,
+            padx=THEME['padding'],
+            pady=6
+        )
+        self.status_bar.grid(row=2, column=0, sticky='ew')
+        
+        # Add hover effects
+        self.add_hover_effects()
+    
+    def add_hover_effects(self):
+        def on_enter(event):
+            self.image_label.config(bg=THEME['bg_light'])
+        
+        def on_leave(event):
+            self.image_label.config(bg=THEME['bg_medium'])
+        
+        self.image_label.bind('<Enter>', on_enter)
+        self.image_label.bind('<Leave>', on_leave)
     
     def setup_drop_target(self):
         # Enable drag and drop for the window
@@ -202,17 +176,23 @@ class ExifUserCommentRenderer:
     def display_image(self, file_path):
         """Display the image in the image area"""
         try:
-            # Open and resize the image while maintaining aspect ratio
             img = Image.open(file_path)
-            img.thumbnail((400, 300))
-            self.photo_image = ImageTk.PhotoImage(img)
+            # Calculate aspect ratio for better fit
+            display_width = 500
+            aspect_ratio = img.width / img.height
+            display_height = int(display_width / aspect_ratio)
+            img = img.resize((display_width, display_height), Image.Resampling.LANCZOS)
             
-            # Update the image label
+            self.photo_image = ImageTk.PhotoImage(img)
             self.image_label.config(image=self.photo_image, text="")
-            self.image_label.image = self.photo_image  # Keep a reference
+            self.image_label.image = self.photo_image
             
         except Exception as e:
-            self.image_label.config(text=f"Error displaying image: {e}", image="")
+            self.image_label.config(
+                text=f"Error displaying image",
+                image="",
+                fg=THEME['accent']
+            )
     
     def extract_and_display_exif(self, file_path):
         """Extract EXIF data and display it"""
@@ -220,8 +200,8 @@ class ExifUserCommentRenderer:
             # Clear previous content
             self.metadata_text.delete(1.0, tk.END)
             
-            # Get EXIF data using read_exif function
-            metadata = read_exif(file_path)
+            # Get EXIF data using exif_utils
+            metadata = exif_utils.read_exif(file_path)
             
             if not metadata:
                 self.metadata_text.insert(tk.END, "No EXIF UserComment data found in this image.")
@@ -234,7 +214,6 @@ class ExifUserCommentRenderer:
         except Exception as e:
             self.metadata_text.delete(1.0, tk.END)
             self.metadata_text.insert(tk.END, f"Error extracting EXIF data: {e}")
-
 
 def main():
     # Check if TkinterDnD is available

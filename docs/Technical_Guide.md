@@ -523,6 +523,132 @@ python -m pytest tests/test_model_utils.py::TestModelUtilsLocal::test_detect_bri
    ```
 3. Verify that piexif library is properly installed
 
----
+## CLI Usage Reference
 
+### Command Groups
+
+The CLI is organized into the following command groups:
+
+1. **Detection Commands**
+   - `detect-bricks`: Detect LEGO bricks in images
+   - `detect-studs`: Detect studs on LEGO bricks
+   - `infer`: Run full detection pipeline
+
+2. **Training Commands**
+   - `train`: Train detection models for bricks or studs
+
+3. **Data Processing Commands**
+   - `data-processing labelme-to-yolo`: Convert LabelMe annotations
+   - `data-processing keypoints-to-bboxes`: Convert keypoint annotations
+   - `data-processing visualize`: Visualize YOLO annotations
+
+4. **Metadata Commands**
+   - `metadata inspect`: Display detailed metadata for an image
+   - `metadata clean-batch`: Clean metadata from multiple images
+
+5. **Utility Commands**
+   - `cleanup`: Clean temporary files and directories
+   - `version`: Display system information
+
+### Global Options
+
+- `--debug/--no-debug`: Enable debug output
+- `--version`: Show version information
+- `--help`: Display command help
+
+### Detection Commands
+
+```bash
+# Detect bricks in images
+lego_cli.py detect-bricks \
+    --image PATH \              # Input image or directory
+    --output PATH \             # Output directory
+    --conf FLOAT \             # Confidence threshold (0-1)
+    --save-annotated/--no-save-annotated \
+    --save-json/--no-save-json \
+    --clean-exif/--no-clean-exif
+
+# Detect studs on bricks
+lego_cli.py detect-studs \
+    --image PATH \
+    --output PATH \
+    --conf FLOAT \
+    --save-annotated/--no-save-annotated \
+    --clean-exif/--no-clean-exif
+
+# Run full pipeline
+lego_cli.py infer \
+    --image PATH \
+    --output PATH \
+    --save-annotated/--no-save-annotated \
+    --force-run/--no-force-run
+```
+
+### Training Command
+
+```bash
+lego_cli.py train \
+    --mode [bricks|studs] \    # Training mode
+    --epochs INT \             # Number of epochs
+    --batch-size INT \         # Training batch size
+    --show-results/--no-show-results \
+    --cleanup/--no-cleanup \
+    --force-extract \          # Force dataset re-extraction
+    --use-pretrained          # Use LEGO-trained model
+```
+
+### Data Processing Commands
+
+```bash
+# Convert LabelMe annotations
+lego_cli.py data-processing labelme-to-yolo --input PATH
+
+# Convert keypoints to bounding boxes
+lego_cli.py data-processing keypoints-to-bboxes \
+    --input PATH \
+    --area-ratio FLOAT
+
+# Visualize annotations
+lego_cli.py data-processing visualize \
+    --input PATH \
+    --labels PATH \
+    --grid-size TEXT          # e.g., "3x4"
+```
+
+### Metadata Commands
+
+```bash
+# Inspect single image metadata
+lego_cli.py metadata inspect IMAGE
+
+# Clean metadata from multiple images
+lego_cli.py metadata clean-batch FOLDER [--force]
+```
+
+### Utility Commands
+
+```bash
+# Clean temporary files
+lego_cli.py cleanup \
+    [--all] \                  # Clean everything
+    [--logs-only] \            # Clean only logs
+    [--cache-only] \           # Clean only cache
+    [--results-only]           # Clean only results
+
+# Show version information
+lego_cli.py version
+```
+
+### Rich Output
+
+The CLI supports enhanced output formatting when the `rich` package is installed:
+- Colored and styled text
+- Progress bars with spinners
+- Tables for structured data
+- Panels for command headers
+- Tree views for metadata inspection
+
+Without `rich`, the CLI falls back to basic text output while maintaining full functionality.
+
+---
 This Technical Guide serves as a comprehensive reference for developers working with the LEGO Bricks ML Vision project. For additional support or questions, please refer to project documentation or contact the project maintainer.

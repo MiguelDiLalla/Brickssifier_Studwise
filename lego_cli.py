@@ -20,6 +20,7 @@ import glob
 import json
 from datetime import datetime
 from pathlib import Path
+import random
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
@@ -31,6 +32,7 @@ from rich.text import Text
 from rich.style import Style
 from rich.layout import Layout
 from rich.progress import *
+from rich.box import ROUNDED
 
 
 # Try importing rich for enhanced console output
@@ -51,6 +53,7 @@ from utils.config_utils import setup_utils, config
 from utils.detection_utils import detect_bricks, detect_studs
 from utils.pipeline_utils import run_full_algorithm, batch_process
 from utils.exif_utils import read_exif, write_exif, clean_exif_metadata
+from utils.visualization_utils import display_conversion_summary
 import utils.data_utils as data_utils
 
 # Version information
@@ -86,9 +89,113 @@ def validate_output_dir(ctx, param, value):
         os.makedirs(value, exist_ok=True)
     return value
 
-#
-# CLI Groups and Commands
-#
+def display_rich_help():
+    """Display a rich formatted help showcase of all commands and options."""
+    if not RICH_AVAILABLE:
+        return False
+        
+    console.print(Panel.fit(
+        "[bold blue]LEGO Bricks ML Vision CLI[/bold blue]\n" +
+        "[dim]A comprehensive tool for LEGO brick detection and analysis[/dim]",
+        border_style="blue"
+    ))
+    
+    # Main commands table
+    commands_table = Table(
+        title="Available Commands",
+        show_header=True,
+        header_style="bold cyan",
+        box=ROUNDED
+    )
+    commands_table.add_column("Command", style="green")
+    commands_table.add_column("Description", style="yellow")
+    commands_table.add_column("Options", style="cyan")
+    
+    # Command groups and their commands
+    command_groups = {
+        "Detection Commands": [
+            ("detect-bricks", "Detect LEGO bricks in images", [
+                "--image PATH", "--output PATH", "--conf FLOAT",
+                "--save-annotated/--no-save-annotated",
+                "--save-json/--no-save-json",
+                "--clean-exif/--no-clean-exif"
+            ]),
+            ("detect-studs", "Detect studs on LEGO bricks", [
+                "--image PATH", "--output PATH", "--conf FLOAT",
+                "--save-annotated/--no-save-annotated",
+                "--clean-exif/--no-clean-exif"
+            ]),
+            ("infer", "Run full detection pipeline", [
+                "--image PATH", "--output PATH",
+                "--save-annotated/--no-save-annotated",
+                "--force-run/--no-force-run"
+            ])
+        ],
+        "Training Commands": [
+            ("train", "Train detection models", [
+                "--mode [bricks|studs]", "--epochs INT", "--batch-size INT",
+                "--show-results/--no-show-results", "--cleanup/--no-cleanup",
+                "--force-extract", "--use-pretrained"
+            ])
+        ],
+        "Data Processing": [
+            ("data-processing labelme-to-yolo", "Convert LabelMe to YOLO format", [
+                "--input PATH"
+            ]),
+            ("data-processing keypoints-to-bboxes", "Convert keypoints to bboxes", [
+                "--input PATH", "--area-ratio FLOAT"
+            ]),
+            ("data-processing visualize", "Visualize annotations", [
+                "--input PATH", "--labels PATH", "--grid-size TEXT"
+            ]),
+            ("data-processing demo-conversion", "Generate visual demonstration of the annotation conversion pipeline", [
+                "--input PATH", "--samples INT", "--output PATH"
+            ])
+        ],
+        "Metadata Commands": [
+            ("metadata inspect", "Inspect image metadata", [
+                "IMAGE"
+            ]),
+            ("metadata clean-batch", "Clean metadata from images", [
+                "FOLDER", "--force"
+            ])
+        ],
+        "Utility Commands": [
+            ("cleanup", "Clean temporary files", [
+                "--all", "--logs-only", "--cache-only", "--results-only"
+            ]),
+            ("version", "Show version information", [])
+        ]
+    }
+    
+    for group_name, commands in command_groups.items():
+        # Add group header
+        commands_table.add_row(
+            f"[bold]{group_name}[/bold]", "", "",
+            style="bold white on blue"
+        )
+        
+        # Add commands in group
+        for cmd, desc, opts in commands:
+            options_str = "\n".join(opts) if opts else "None"
+            commands_table.add_row(cmd, desc, options_str)
+        
+        # Add separator
+        commands_table.add_row("", "", "")
+    
+    console.print(commands_table)
+    
+    # Global options panel
+    console.print(Panel(
+        "[bold]Global Options:[/bold]\n" +
+        "  [cyan]--debug/--no-debug[/cyan]  Enable debug output\n" +
+        "  [cyan]--version[/cyan]           Show version information\n" +
+        "  [cyan]--help[/cyan]             Show this help message",
+        title="Options",
+        border_style="green"
+    ))
+    
+    return True
 
 @click.group()
 @click.option('--debug/--no-debug', default=False, help='Enable debug output.')
@@ -96,26 +203,19 @@ def validate_output_dir(ctx, param, value):
               help='Show version information and exit.')
 def cli(debug):
     """LEGO Bricks ML Vision - Command Line Interface
-
+    
     This tool provides commands for detecting LEGO bricks, classifying their dimensions,
     training models, and processing datasets.
-
-    Inference Arguments:
-      For detection and inference commands (detect-bricks, detect-studs, infer):
-      --image    Path to input image or directory containing images (jpg/png)
-      --output   Directory to save results (created if not exists)
-      --conf     Confidence threshold for detections (0.0-1.0)
-
-    Common Options:
-      --save-annotated   Save images with detection visualizations
-      --save-json       Save detection results in JSON format
-      --clean-exif      Clean EXIF metadata before processing
-      --force-run       Force re-run detection (ignore cached results)
     """
-    # Set debug level if requested
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Debug mode enabled")
+    
+    # Show rich help if --help is used
+    ctx = click.get_current_context()
+    if '--help' in sys.argv and RICH_AVAILABLE:
+        if display_rich_help():
+            ctx.exit()
 
 @cli.command('detect-bricks')
 @click.option('--image', required=True, type=click.Path(exists=True),
@@ -603,77 +703,82 @@ def data_processing():
 @data_processing.command('labelme-to-yolo')
 @click.option('--input', required=True, type=click.Path(exists=True),
               help='Input folder containing LabelMe JSON files.')
-def labelme_to_yolo_cmd(input):
-    """Convert LabelMe JSON annotations to YOLO format."""
-    # Create args object to match data_utils expected interface
-    class Args:
-        def __init__(self, input):
-            self.input = input
+@click.option('--output', type=click.Path(),
+              help='Output folder for YOLO annotations (default: cache/datasets/processed/YOLO_labels).')
+@click.option('--clean/--no-clean', default=False,
+              help='Clean output directory before processing.')
+def labelme_to_yolo_cmd(input, output, clean):
+    """Convert LabelMe JSON annotations to YOLO format.
     
-    args = Args(input)
+    Processes all JSON files in input folder and generates corresponding YOLO txt files.
+    Original files are preserved, and a conversion summary is displayed.
+    """
+    if not output:
+        output = os.path.join("cache", "datasets", "processed", "YOLO_labels")
+    
+    class Args:
+        def __init__(self, input, output, clean):
+            self.input = input
+            self.output = output
+            self.clean = clean
+    
+    args = Args(input, output, clean)
     
     if RICH_AVAILABLE:
         console.print(Panel.fit("[bold blue]Converting LabelMe to YOLO Format[/bold blue]"))
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
-            TimeElapsedColumn(),
-            console=console
-        ) as progress:
+        with Progress() as progress:
             task = progress.add_task("[green]Converting annotations...", total=100)
-            progress.update(task, advance=10)
-            
-            data_utils.convert_labelme_to_yolo(args)
-            
+            results = data_utils.convert_labelme_to_yolo(args)
             progress.update(task, completed=100)
             
-        console.print("[bold green]Conversion completed![/bold green]")
-        
+        if results:  # Only display summary if results are returned
+            display_conversion_summary(results, console)
     else:
-        logger.info("Converting LabelMe to YOLO format...")
-        data_utils.convert_labelme_to_yolo(args)
-        logger.info("Conversion completed!")
-        
+        results = data_utils.convert_labelme_to_yolo(args)
+        logger.info(f"Processed {results['total']} files")
+        logger.info(f"Success: {results['success']}, Failed: {results['failed']}")
+
 @data_processing.command('keypoints-to-bboxes')
 @click.option('--input', required=True, type=click.Path(exists=True),
               help='Input folder containing keypoints JSON files.')
+@click.option('--output', type=click.Path(),
+              help='Output folder for bounding boxes (default: cache/datasets/processed/bboxes).')
 @click.option('--area-ratio', type=float, default=0.4,
               help='Total area ratio for bounding boxes.')
-def keypoints_to_bboxes_cmd(input, area_ratio):
-    """Convert keypoints to bounding boxes."""
-    # Create args object to match data_utils expected interface
-    class Args:
-        def __init__(self, input, area_ratio):
-            self.input = input
-            self.area_ratio = area_ratio
+@click.option('--clean/--no-clean', default=False,
+              help='Clean output directory before processing.')
+def keypoints_to_bboxes_cmd(input, output, area_ratio, clean):
+    """Convert keypoints from LabelMe JSON into bounding boxes.
     
-    args = Args(input, area_ratio)
+    Processes all JSON files in input folder and generates corresponding bounding box annotations.
+    Original files are preserved, and a conversion summary is displayed.
+    """
+    if not output:
+        output = os.path.join("cache", "datasets", "processed", "bboxes")
+    
+    class Args:
+        def __init__(self, input, output, area_ratio, clean):
+            self.input = input
+            self.output = output
+            self.area_ratio = area_ratio
+            self.clean = clean
+    
+    args = Args(input, output, area_ratio, clean)
     
     if RICH_AVAILABLE:
         console.print(Panel.fit("[bold blue]Converting Keypoints to Bounding Boxes[/bold blue]"))
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
-            TimeElapsedColumn(),
-            console=console
-        ) as progress:
+        with Progress() as progress:
             task = progress.add_task("[green]Converting keypoints...", total=100)
-            progress.update(task, advance=10)
-            
-            data_utils.convert_keypoints_to_bboxes(args)
-            
+            results = data_utils.convert_keypoints_to_bboxes(args)
             progress.update(task, completed=100)
             
-        console.print("[bold green]Conversion completed![/bold green]")
-        
+        display_conversion_summary(results, console)
     else:
-        logger.info("Converting keypoints to bounding boxes...")
-        data_utils.convert_keypoints_to_bboxes(args)
-        logger.info("Conversion completed!")
+        results = data_utils.convert_keypoints_to_bboxes(args)
+        logger.info(f"Processed {results['total']} files")
+        logger.info(f"Success: {results['success']}, Failed: {results['failed']}")
 
 @data_processing.command('visualize')
 @click.option('--input', required=True, type=click.Path(exists=True),
@@ -699,6 +804,76 @@ def visualize_cmd(input, labels, grid_size):
     logger.info("Visualizing YOLO annotations...")
     data_utils.visualize_yolo_annotation(args)
     logger.info("Visualization completed!")
+
+@data_processing.command('demo-conversion')
+@click.option('--input', required=True, type=click.Path(exists=True),
+              help='Input folder containing LabelMe JSON files.')
+@click.option('--samples', default=3, type=int,
+              help='Number of sample images to process (default: 3).')
+@click.option('--output', type=click.Path(),
+              help='Output folder for demo results (default: results/demo_conversion).')
+def demo_conversion_cmd(input, samples, output):
+    """Generate visual demonstration of the annotation conversion pipeline.
+    
+    Creates a side-by-side comparison showing:
+    1. Original image in grayscale
+    2. LabelMe annotations visualization
+    3. YOLO format annotations visualization
+    
+    Results are saved in a timestamped folder within the output directory.
+    """
+    if not output:
+        output = os.path.join("results", "demo_conversion")
+    
+    # Create timestamped output folder
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_folder = os.path.join(output, f"demo_{timestamp}")
+    os.makedirs(output_folder, exist_ok=True)
+
+    if RICH_AVAILABLE:
+        console.print(Panel.fit("[bold blue]Annotation Conversion Demo[/bold blue]"))
+        
+        with Progress() as progress:
+            # List and sample JSON files
+            json_files = glob.glob(os.path.join(input, "*.json"))
+            if len(json_files) == 0:
+                console.print("[red]No JSON files found in input folder[/red]")
+                return
+                
+            selected_files = random.sample(json_files, min(samples, len(json_files)))
+            
+            # Process each sample
+            task = progress.add_task(
+                "[green]Processing samples...", 
+                total=len(selected_files)
+            )
+            
+            for json_file in selected_files:
+                demo_result = data_utils.create_conversion_demo(
+                    json_file, 
+                    output_folder
+                )
+                if demo_result:
+                    console.print(f"[green]✓[/green] Processed {os.path.basename(json_file)}")
+                else:
+                    console.print(f"[red]✗[/red] Failed to process {os.path.basename(json_file)}")
+                progress.update(task, advance=1)
+                
+        console.print(f"\n[bold green]Demo results saved to:[/bold green] {output_folder}")
+    else:
+        # Non-rich version
+        json_files = glob.glob(os.path.join(input, "*.json"))
+        if len(json_files) == 0:
+            click.echo("No JSON files found in input folder")
+            return
+            
+        selected_files = random.sample(json_files, min(samples, len(json_files)))
+        
+        with click.progressbar(selected_files, label='Processing samples') as bar:
+            for json_file in bar:
+                data_utils.create_conversion_demo(json_file, output_folder)
+                
+        click.echo(f"\nDemo results saved to: {output_folder}")
 
 @cli.command('cleanup')
 @click.option('--all', 'all_files', is_flag=True, help='Clean all temporary files, including results.')
@@ -847,6 +1022,122 @@ def version_cmd():
         import platform
         click.echo(f"OS: {platform.platform()}")
 
+@cli.group('metadata')
+def metadata():
+    """Commands for inspecting and managing image metadata."""
+    pass
+
+@metadata.command('inspect')
+@click.argument('image', type=click.Path(exists=True))
+def inspect_metadata_cmd(image):
+    """Display detailed metadata information for a single image."""
+    from utils.exif_utils import read_exif
+    
+    if RICH_AVAILABLE:
+        console.print(Panel.fit(f"[bold blue]Metadata Inspection for {os.path.basename(image)}[/bold blue]"))
+        
+        metadata = read_exif(image)
+        if not metadata:
+            console.print("[yellow]No metadata found in image.[/yellow]")
+            return
+
+        # Create a rich table view of the metadata
+        table = Table(show_header=False, box=ROUNDED)
+        table.add_column("Key", style="cyan")
+        table.add_column("Value", style="green")
+        
+        def add_dict_to_table(d, prefix=''):
+            for key, value in d.items():
+                if isinstance(value, dict):
+                    table.add_row(f"{prefix}{key}", "[blue]<nested>[/blue]")
+                    add_dict_to_table(value, prefix + '  ')
+                else:
+                    table.add_row(f"{prefix}{key}", str(value))
+        
+        add_dict_to_table(metadata)
+        console.print(table)
+    else:
+        metadata = read_exif(image)
+        if not metadata:
+            click.echo("No metadata found in image.")
+            return
+        click.echo(json.dumps(metadata, indent=2))
+
+@metadata.command('clean-batch')
+@click.argument('folder', type=click.Path(exists=True))
+@click.option('--force', is_flag=True, help='Skip confirmation prompt.')
+def clean_batch_metadata_cmd(folder, force):
+    """Clean metadata from all images in a folder."""
+    from utils.exif_utils import read_exif, clean_exif_metadata
+    
+    # Find all images in folder
+    images = []
+    for ext in ['.jpg', '.jpeg', '.png']:
+        images.extend(glob.glob(os.path.join(folder, f"*{ext}")))
+    
+    if not images:
+        if RICH_AVAILABLE:
+            console.print("[yellow]No images found in folder.[/yellow]")
+        else:
+            click.echo("No images found in folder.")
+        return
+    
+    # Check which images have metadata
+    images_with_meta = []
+    for img in images:
+        if read_exif(img):
+            images_with_meta.append(img)
+    
+    if not images_with_meta:
+        if RICH_AVAILABLE:
+            console.print("[yellow]No images with metadata found.[/yellow]")
+        else:
+            click.echo("No images with metadata found.")
+        return
+    
+    # Show summary
+    if RICH_AVAILABLE:
+        console.print(Panel.fit(f"[bold blue]Batch Metadata Cleaning[/bold blue]"))
+        table = Table(title="Summary")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Count", style="green")
+        table.add_row("Total images", str(len(images)))
+        table.add_row("Images with metadata", str(len(images_with_meta)))
+        console.print(table)
+    else:
+        click.echo(f"Total images: {len(images)}")
+        click.echo(f"Images with metadata: {len(images_with_meta)}")
+    
+    # Ask for confirmation unless --force is used
+    if not force:
+        if not click.confirm("Do you want to clean metadata from these images?"):
+            if RICH_AVAILABLE:
+                console.print("[yellow]Operation cancelled.[/yellow]")
+            else:
+                click.echo("Operation cancelled.")
+            return
+    
+    # Clean metadata
+    if RICH_AVAILABLE:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TimeElapsedColumn(),
+            console=console
+        ) as progress:
+            task = progress.add_task("[green]Cleaning metadata...", total=len(images_with_meta))
+            
+            for img in images_with_meta:
+                clean_exif_metadata(img)
+                progress.update(task, advance=1)
+                
+        console.print("[bold green]Metadata cleaning completed![/bold green]")
+    else:
+        with click.progressbar(images_with_meta, label='Cleaning metadata') as bar:
+            for img in bar:
+                clean_exif_metadata(img)
+        click.echo("Metadata cleaning completed!")
 
 if __name__ == "__main__":
     # Create logs directory if it doesn't exist

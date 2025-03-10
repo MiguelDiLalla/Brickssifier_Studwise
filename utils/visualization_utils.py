@@ -387,3 +387,24 @@ def display_results_table(brick_results, studs_results):
     )
     
     console.print(table)
+
+def display_conversion_summary(stats, console):
+    """Display a rich formatted summary of conversion results."""
+    table = Table(title="Conversion Summary")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+    
+    table.add_row("Files Processed", str(stats['total']))
+    table.add_row("Successful Conversions", str(stats['success']))
+    table.add_row("Failed Conversions", str(stats['failed']))
+    
+    if stats['total'] > 0:
+        success_rate = (stats['success'] / stats['total']) * 100
+        table.add_row("Success Rate", f"{success_rate:.1f}%")
+    
+    table.add_row("Output Location", stats['output_path'])
+    
+    console.print(table)
+    
+    if stats['failed'] > 0:
+        console.print("[yellow]⚠️ Some conversions failed. Check the logs for details.[/yellow]")
