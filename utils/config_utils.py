@@ -51,15 +51,57 @@ def setup_utils(repo_download=False):
     logger.info("📌 REPO URL set to: %s", CONFIG_DICT["REPO_URL"])
     
     # Define model and test images folders relative to project structure.
+    # Find most recent model files dynamically
+    models_dir = os.path.join(os.getcwd(), "presentation", "Models_DEMO")
+    
+    def get_latest_model(substring):
+        if not os.path.exists(models_dir):
+            logger.warning(f"⚠️ Models directory not found: {models_dir}")
+            return None
+        model_files = [f for f in os.listdir(models_dir) if f.endswith('.pt') and substring.lower() in f.lower()]
+        if not model_files:
+            logger.warning(f"⚠️ No {substring} model files found")
+            return None
+        latest_model = max(model_files, key=lambda f: os.path.getmtime(os.path.join(models_dir, f)))
+        return os.path.join("presentation", "Models_DEMO", latest_model)
+
     CONFIG_DICT["MODELS_PATHS"] = {
-        "bricks": r"presentation/Models_DEMO/Brick_Model_best20250123_192838t.pt",
-        "studs": r"presentation/Models_DEMO/Stud_Model_best20250124_170824.pt"
+        "bricks": get_latest_model("Brick"),
+        "studs": get_latest_model("Stud")
     }
+
+    # Log found model paths
+    for model_type, path in CONFIG_DICT["MODELS_PATHS"].items():
+        if path:
+            logger.info(f"✅ Found latest {model_type} model: {path}")
+        else:
+            logger.error(f"❌ No {model_type} model found")
     CONFIG_DICT["TEST_IMAGES_FOLDERS"] = {
         "bricks": r"presentation/Test_images/BricksPics",
         "studs": r"presentation/Test_images/StudsPics"
     }
     
+    # Find the LEGO_Bricks_ML_Vision directory
+    current_dir = os.getcwd()
+    target_dir = "LEGO_Bricks_ML_Vision"
+    
+    if os.path.basename(current_dir) != target_dir:
+        # Check current directory
+        potential_path = os.path.join(current_dir, target_dir)
+        if os.path.exists(potential_path):
+            os.chdir(potential_path)
+            logger.info(f"✅ Changed working directory to: {potential_path}")
+        else:
+            # Check one level up
+            parent_dir = os.path.dirname(current_dir)
+            potential_path = os.path.join(parent_dir, target_dir)
+            if os.path.exists(potential_path):
+                os.chdir(potential_path)
+                logger.info(f"✅ Changed working directory to: {potential_path}")
+            else:
+                logger.warning(f"⚠️ Could not find {target_dir} directory")
+    
+    CONFIG_DICT["WORKING_DIR"] = os.getcwd()
     logger.info("📂 Current working directory: %s", os.getcwd())
 
     def get_image_files(folder):
@@ -147,6 +189,20 @@ def setup_utils(repo_download=False):
         12: ["6x2", "12x1"],
         16: ["4x4", "8x2"]
     }
+    # Scan all possible dimensions and create a dictionary mapping IDs to classes
+    CONFIG_DICT["BRICKS_DIMENSIONS_CLASSES"] = {}
+    class_id = 0
+    for key, value in CONFIG_DICT["STUDS_TO_DIMENSIONS_MAP"].items():
+        if isinstance(value, list):
+            for v in value:
+                CONFIG_DICT["BRICKS_DIMENSIONS_CLASSES"][class_id] = v
+                class_id += 1
+        else:
+            CONFIG_DICT["BRICKS_DIMENSIONS_CLASSES"][class_id] = value
+            class_id += 1
+    # Log available classes
+    logger.info("🧱 Available classes: %s", CONFIG_DICT["BRICKS_DIMENSIONS_CLASSES"])
+    logger.info("🔢 Total number of classes: %d", len(CONFIG_DICT["BRICKS_DIMENSIONS_CLASSES"]))
 
     # Default EXIF metadata backbone.
     CONFIG_DICT["EXIF_METADATA_DEFINITIONS"] = {

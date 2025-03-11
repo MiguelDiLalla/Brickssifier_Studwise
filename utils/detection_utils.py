@@ -53,6 +53,13 @@ except ImportError:
         RICH_AVAILABLE = False
         print("Warning: 'rich' package not available. Install with: pip install rich")
 
+# Import classification functions directly
+from utils.classification_utils import (
+    classify_dimensions,
+    analyze_stud_pattern,
+    predict_dimension_from_pattern
+)
+
 def detect_bricks(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder="", use_progress=True, force_rerun=False):
     """
     Performs brick detection using the provided YOLO model with rich progress display.
@@ -258,8 +265,7 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
         - Integrates with classify_dimensions for dimension determination
         - Saves metadata to image EXIF data for future reference
     """
-    # Import here to avoid circular imports
-    from utils.classification_utils import classify_dimensions
+    # Remove circular import
     from utils.visualization_utils import read_detection
     
     # Message if output folder is not provided
@@ -304,6 +310,16 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
         results = model.predict(source=image, conf=conf)
         if isinstance(image_input, str):
             results[0].path = image_input
+            
+        # Use classification utils directly
+        dimension_info = classify_dimensions(results, orig_image)
+        dimension_result = dimension_info.get("dimension", "Unknown")
+        annotated_image = dimension_info.get("annotated_image", annotated_image)
+        
+        metadata = extract_metadata_from_yolo_result(results, orig_image)
+        metadata["mode"] = "stud"
+        metadata["dimension"] = dimension_result
+        
         boxes_np = (results[0].boxes.xyxy.cpu().numpy() if results and results[0].boxes.xyxy is not None else np.array([]))
         if boxes_np.size == 0:
             logger.warning("⚠️ No detections found.")
@@ -314,15 +330,6 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
                 "metadata": {},
                 "status": "no_detections"
             }
-
-        # Classify dimensions based on detected studs
-        dimension_info = classify_dimensions(results, orig_image)
-        dimension_result = dimension_info.get("dimension", "Unknown")
-        annotated_image = dimension_info.get("annotated_image", annotated_image)
-        metadata = extract_metadata_from_yolo_result(results, orig_image)
-        # Set the mode explicitly to "stud" to distinguish the detection type
-        metadata["mode"] = "stud"
-        metadata["dimension"] = dimension_result
         
     except Exception as e:
         logger.error("❌ Error during studs detection: %s", e)

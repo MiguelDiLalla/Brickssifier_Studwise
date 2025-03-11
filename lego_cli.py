@@ -55,6 +55,8 @@ from utils.pipeline_utils import run_full_algorithm, batch_process
 from utils.exif_utils import read_exif, write_exif, clean_exif_metadata
 from utils.visualization_utils import display_conversion_summary
 import utils.data_utils as data_utils
+from utils.batch_utils import process_batch_inference, display_batch_results
+from utils.visualization_utils import create_batch_visualization
 
 # Version information
 __version__ = "1.0.0"
@@ -129,6 +131,9 @@ def display_rich_help():
                 "--image PATH", "--output PATH",
                 "--save-annotated/--no-save-annotated",
                 "--force-run/--no-force-run"
+            ]),
+            ("batch-inference", "Run batch inference to generate YOLO annotations", [
+                "--input PATH", "--output PATH"
             ])
         ],
         "Training Commands": [
@@ -1138,6 +1143,121 @@ def clean_batch_metadata_cmd(folder, force):
             for img in bar:
                 clean_exif_metadata(img)
         click.echo("Metadata cleaning completed!")
+
+@cli.command('batch-inference')
+@click.option('--input', required=True, type=click.Path(exists=True),
+              help='Input folder containing images to process.')
+@click.option('--output', type=click.Path(),
+              help='Output folder for YOLO annotations (default: results/batch_inference).')
+def batch_inference_cmd(input, output):
+    """
+    Run batch inference to generate YOLO annotations.
+    
+    Processes all images in the input folder:
+    1. Detects LEGO bricks
+    2. For each brick, detects studs and classifies dimensions
+    3. Generates YOLO format annotations for valid detections
+    4. Saves metadata including class mappings
+    
+    Example:
+        lego_cli.py batch-inference --input dataset/images --output dataset/labels
+    """
+    if not output:
+        output = os.path.join("results", "batch_inference")
+    
+    # Get dimensions mapping from config
+    dimensions_map = config.get("BRICKS_DIMENSIONS_CLASSES", {})
+    
+    if RICH_AVAILABLE:
+        console.print(Panel.fit("[bold blue]Batch Inference Processing[/bold blue]"))
+        
+        # Show dimensions mapping
+        map_table = Table(title="Class ID Mapping")
+        map_table.add_column("ID", style="cyan")
+        map_table.add_column("Dimension", style="green")
+        
+        for class_id, dimension in dimensions_map.items():
+            map_table.add_row(str(class_id), dimension)
+        
+        console.print(map_table)
+        
+        # Process with progress tracking
+        with Progress() as progress:
+            task = progress.add_task(
+                "[green]Processing images...",
+                total=len(list(Path(input).glob('*.[jp][pn][g]')))
+            )
+            
+            stats = process_batch_inference(
+                input,
+                output,
+                dimensions_map,
+                progress
+            )
+        
+        # Display results
+        display_batch_results(stats, console)
+        
+        console.print(f"\n[bold green]Results saved to:[/bold green] {output}")
+        
+    else:
+        # Non-rich version
+        logger.info("Processing images from: %s", input)
+        stats = process_batch_inference(input, output, dimensions_map)
+        logger.info("Processing complete:")
+        logger.info("- Processed %d images", stats['processed_images'])
+        logger.info("- Found %d bricks (%d valid, %d unknown)",
+                   stats['total_bricks'],
+                   stats['valid_bricks'],
+                   stats['unknown_bricks'])
+        logger.info("Results saved to: %s", output)
+
+@cli.command('visualize-batch')
+@click.argument('metadata_json', type=click.Path(exists=True))
+@click.option('--output', type=click.Path(), help='Output folder for visualization (defaults to metadata output folder).')
+@click.option('--samples', default=6, type=int, help='Number of sample images to visualize (default: 6).')
+def visualize_batch_cmd(metadata_json, output, samples):
+    """
+    Create grid visualizations of randomly selected images with their annotations.
+    
+    Takes a batch inference metadata JSON file and creates one or more 3x3 grid 
+    visualizations showing the YOLO annotations with proper class labels.
+    """
+    # Load metadata
+    try:
+        with open(metadata_json, 'r') as f:
+            metadata = json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to load metadata JSON: {e}")
+        return
+
+    # Use output folder from metadata if not specified
+    if not output:
+        output = metadata['config']['output_folder']
+    os.makedirs(output, exist_ok=True)
+
+    console = Console()
+    console.print("[bold blue]Batch Visualization[/bold blue]")
+    
+    with Progress() as progress:
+        task = progress.add_task("[green]Creating visualizations...", total=100)
+        
+        try:
+            results = create_batch_visualization(
+                metadata_json=metadata_json,
+                output_folder=output,
+                num_samples=samples
+            )
+            progress.update(task, completed=100)
+            
+            if results:
+                console.print(f"\n[green]Created {len(results)} visualization grids:[/green]")
+                for path in results:
+                    console.print(f"  • {path}")
+            else:
+                console.print("[red]Failed to create visualizations[/red]")
+        except Exception as e:
+            console.print(f"[red]Error creating visualizations: {e}[/red]")
 
 if __name__ == "__main__":
     # Create logs directory if it doesn't exist

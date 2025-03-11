@@ -451,10 +451,9 @@ def create_conversion_demo(json_path, output_folder):
             
             # Draw bounding box 
             cv2.rectangle(yolo_viz, (x, y), (x + w, y + h), (0, 0, 255), 2)
-            # Add class ID above the box
+            # Add actual class ID above the box
             label_pos = (x, y - 5)
-            cv2.putText(yolo_viz, "0", label_pos, cv2.FONT_HERSHEY_TRIPLEX, 0.5, (0, 0, 255), 2)
-        
+            cv2.putText(yolo_viz, str(int(class_id)), label_pos, cv2.FONT_HERSHEY_TRIPLEX, 0.5, (0, 0, 255), 2)
         # Create side-by-side comparison
         demo_image = np.hstack([labelme_viz, yolo_viz])
         

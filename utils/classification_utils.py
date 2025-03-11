@@ -128,14 +128,32 @@ def classify_dimensions(results, orig_image, dimension_map=None):
             cv2.putText(annotated_image, str(i+1), (int(x)+5, int(y)), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
         
-        # Draw regression line
+        # Draw regression line and error segments
+        m, b = pattern_result["regression_params"]
+        x1 = 0
+        y1 = int(m * x1 + b)
+        x2 = annotated_image.shape[1]
+        y2 = int(m * x2 + b)
+
         if pattern_result["pattern_type"] == "linear":
-            m, b = pattern_result["regression_params"]
-            x1 = 0
-            y1 = int(m * x1 + b)
-            x2 = annotated_image.shape[1]
-            y2 = int(m * x2 + b)
+            # Blue line for linear patterns
             cv2.line(annotated_image, (x1, y1), (x2, y2), (255, 0, 0), 2)
+        else:
+            # Create overlay for alpha blending
+            overlay = annotated_image.copy()
+            # Purple-violet line for grid patterns
+            cv2.line(overlay, (x1, y1), (x2, y2), (255, 255, 0), 2)
+            
+            # Draw error segments
+            for center in pattern_result["centers"]:
+                cx, cy = center
+                # Calculate point on regression line
+                y_line = int(m * cx + b)
+                # Draw vertical error segment
+                cv2.line(overlay, (int(cx), y_line), (int(cx), int(cy)), (255, 255, 0), 2)
+
+                # Apply alpha blending
+                cv2.addWeighted(overlay, 0.7, annotated_image, 0.3, 0, annotated_image)
         
         # Add dimension text
         h, w = annotated_image.shape[:2]

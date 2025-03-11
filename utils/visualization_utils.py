@@ -30,6 +30,14 @@ from utils.exif_utils import read_exif
 from rich.table import Table
 from rich.console import Console
 
+import os
+import json
+import glob
+import random
+from datetime import datetime
+from typing import List
+from pathlib import Path
+
 def annotate_scanned_image(image_path):
     """
     Annotates the provided image with the metadata retrieved via read_exif().
@@ -178,21 +186,10 @@ def read_detection(image_path):
             conf = f"{box_info.get('confidence', 0.0):.2f}"
             # Reduce font size by half if label is "stud"
             font_size = 0.25 if label == "stud" else 0.5
-            cv2.putText(annotated_image, f"{label} {conf}", (x1, y1-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, font_size, (0, 255, 0), 2)
-            
-            crop = orig_image[y1:y2, x1:x2]
-            cropped_detections.append(crop) 
-            
-            logger.info(f"📦 Detected crop from coordinates: {coords}")
         else:
             logger.warning("⚠️ Invalid coordinates found in metadata: %s", coords)
         
-        # at the bottom right of the image add "NO MODEL RAN"
-        text_position = (annotated_image.shape[1] - 150, annotated_image.shape[0] - 10)
-        cv2.putText(annotated_image, "NO MODEL RAN", text_position, 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-        # TYPE the dimensions detected if the label is "stud"
+    # TYPE the dimensions detected if the label is "stud"
     if label == "stud":
         dimension = metadata.get("dimension", "Dimensions not found")
         # Position the dimension text at the top left of the image
@@ -203,7 +200,7 @@ def read_detection(image_path):
         return {
             "orig_image": orig_image,
             "annotated_image": annotated_image,
-            # "cropped_detections": cropped_detections,
+            "cropped_detections": cropped_detections,
             "metadata": metadata,
             "dimensions": dimension,
             "status": "success"
@@ -408,3 +405,144 @@ def display_conversion_summary(stats, console):
     
     if stats['failed'] > 0:
         console.print("[yellow]⚠️ Some conversions failed. Check the logs for details.[/yellow]")
+
+def split_into_batches(items: List[any], batch_size: int = 9) -> List[List[any]]:
+    """
+    Split a list of items into batches of specified size.
+    
+    Args:
+        items: List of items to split
+        batch_size: Maximum items per batch (default: 9 for 3x3 grid)
+        
+    Returns:
+        List of batches, where each batch is a list of items
+    """
+    return [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
+
+def create_batch_visualization(metadata_json: str, output_folder: str, num_samples: int = 6) -> List[str]:
+    """
+    Creates grid visualizations of images with their YOLO annotations.
+    
+    Args:
+        metadata_json (str): Path to the batch inference metadata JSON file
+        output_folder (str): Folder to save visualization
+        num_samples (int): Total number of images to include in visualization
+        
+    Returns:
+        List[str]: Paths to saved visualizations or empty list if failed
+    """
+    try:
+        # Load metadata
+        with open(metadata_json, 'r') as f:
+            metadata = json.load(f)
+        
+        input_folder = metadata['config']['input_folder']
+        class_map = {int(k): v for k, v in metadata['config']['classes'].items()}
+        
+        # Find all label files
+        label_files = list(Path(output_folder).glob('*.txt'))
+        if not label_files:
+            logger.error("No label files found in output folder")
+            return []
+            
+        # Randomly sample files
+        num_samples = min(num_samples, len(label_files))  # Limit to available files
+        selected_files = random.sample(label_files, num_samples)
+        
+        # Split into batches of 9 (3x3 grid)
+        batches = split_into_batches(selected_files, 9)
+        output_paths = []
+        
+        # Process each batch
+        for batch_idx, batch_files in enumerate(batches, 1):
+            visualizations = []
+            
+            # Create visualization for each file in batch
+            for label_file in batch_files:
+                # Get corresponding image
+                img_stem = label_file.stem
+                img_path = None
+                for ext in ['.jpg', '.jpeg', '.png']:
+                    candidate = Path(input_folder) / f"{img_stem}{ext}"
+                    if candidate.exists():
+                        img_path = candidate
+                        break
+                
+                if not img_path:
+                    continue
+                    
+                # Load and process image
+                image = cv2.imread(str(img_path))
+                if image is None:
+                    continue
+                    
+                # Read YOLO annotations and create visualization
+                boxes = []
+                classes = []
+                with open(label_file, 'r') as f:
+                    for line in f:
+                        class_id, x_center, y_center, width, height = map(float, line.strip().split())
+                        img_height, img_width = image.shape[:2]
+                        
+                        # Convert YOLO format to pixel coordinates
+                        x1 = int((x_center - width/2) * img_width)
+                        y1 = int((y_center - height/2) * img_height)
+                        x2 = int((x_center + width/2) * img_width)
+                        y2 = int((y_center + height/2) * img_height)
+                        
+                        boxes.append([x1, y1, x2, y2])
+                        classes.append(class_map[int(class_id)])
+                
+                vis_image = draw_detection_visualization(
+                    image, boxes, class_names=classes
+                )
+                visualizations.append(vis_image)
+            
+            if visualizations:
+                # Create 3x3 grid for this batch
+                grid_vis = create_visualization_grid(visualizations, 3)
+                
+                # Save visualization with batch number
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = os.path.join(
+                    output_folder, 
+                    f"batch_visualization_{timestamp}_batch_{batch_idx}.jpg"
+                )
+                cv2.imwrite(output_path, grid_vis)
+                output_paths.append(output_path)
+        
+        return output_paths
+        
+    except Exception as e:
+        logger.error(f"Failed to create batch visualization: {e}")
+        return []
+
+def create_visualization_grid(images: List[np.ndarray], grid_size: int) -> np.ndarray:
+    """
+    Creates a grid of images.
+    
+    Args:
+        images: List of images to arrange in grid
+        grid_size: Number of images per row/column
+        
+    Returns:
+        np.ndarray: Grid visualization
+    """
+    # Resize all images to the same size
+    target_size = (800, 600)  # Can be adjusted as needed
+    resized_images = [cv2.resize(img, target_size) for img in images]
+    
+    # Pad list with blank images if needed
+    total_needed = grid_size * grid_size
+    while len(resized_images) < total_needed:
+        blank = np.zeros((target_size[1], target_size[0], 3), dtype=np.uint8)
+        resized_images.append(blank)
+    
+    # Create grid
+    rows = []
+    for i in range(0, total_needed, grid_size):
+        row = np.hstack(resized_images[i:i + grid_size])
+        rows.append(row)
+    grid = np.vstack(rows)
+    
+    return grid
