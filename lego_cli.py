@@ -133,7 +133,7 @@ def display_rich_help():
                 "--force-run/--no-force-run"
             ]),
             ("batch-inference", "Run batch inference to generate YOLO annotations", [
-                "--input PATH", "--output PATH"
+                "--input PATH", "--output PATH", "--skip-errors"
             ])
         ],
         "Training Commands": [
@@ -141,6 +141,9 @@ def display_rich_help():
                 "--mode [bricks|studs]", "--epochs INT", "--batch-size INT",
                 "--show-results/--no-show-results", "--cleanup/--no-cleanup",
                 "--force-extract", "--use-pretrained"
+            ]),
+            ("multiclass-demo-train", "Train a multiclass YOLO model on a custom dataset", [
+                "--dataset PATH", "--epochs INT", "--patience INT"
             ])
         ],
         "Data Processing": [
@@ -700,6 +703,25 @@ def train_cmd(mode, epochs, batch_size, show_results, cleanup, force_extract, us
     else:
         click.echo("Training completed successfully!")
 
+@cli.command('multiclass-demo-train')
+@click.option('--dataset', required=True, type=click.Path(exists=True),
+              help='Path to multiclass dataset (must contain images/ and labels/ folders)')
+@click.option('--epochs', default=50, type=int,
+              help='Number of training epochs')
+@click.option('--patience', default=3, type=int,
+              help='Early stopping patience')
+def multiclass_demo_train(dataset: str, epochs: int, patience: int):
+    """Train a multiclass YOLO model on a custom dataset."""
+    from utils.multiclass_training import train_multiclass_model
+    
+    try:
+        results = train_multiclass_model(dataset)
+        console.print("[bold green]Training completed successfully![/bold green]")
+        return results
+    except Exception as e:
+        console.print(f"[bold red]Training failed: {str(e)}[/bold red]")
+        raise click.Abort()
+
 @cli.group('data-processing')
 def data_processing():
     """Commands for dataset processing and visualization."""
@@ -1149,68 +1171,111 @@ def clean_batch_metadata_cmd(folder, force):
               help='Input folder containing images to process.')
 @click.option('--output', type=click.Path(),
               help='Output folder for YOLO annotations (default: results/batch_inference).')
-def batch_inference_cmd(input, output):
-    """
-    Run batch inference to generate YOLO annotations.
-    
-    Processes all images in the input folder:
-    1. Detects LEGO bricks
-    2. For each brick, detects studs and classifies dimensions
-    3. Generates YOLO format annotations for valid detections
-    4. Saves metadata including class mappings
-    
-    Example:
-        lego_cli.py batch-inference --input dataset/images --output dataset/labels
-    """
+@click.option('--skip-errors', is_flag=True, default=False,
+              help='Continue processing if an image fails.')
+def batch_inference_cmd(input, output, skip_errors):
+    """Run batch inference to generate YOLO annotations."""
     if not output:
         output = os.path.join("results", "batch_inference")
     
     # Get dimensions mapping from config
     dimensions_map = config.get("BRICKS_DIMENSIONS_CLASSES", {})
     
-    if RICH_AVAILABLE:
-        console.print(Panel.fit("[bold blue]Batch Inference Processing[/bold blue]"))
+    try:
+        # Initialize the progress table
+        progress_table = Table(
+            title="Processing Progress",
+            show_header=True,
+            box=ROUNDED
+        )
         
-        # Show dimensions mapping
-        map_table = Table(title="Class ID Mapping")
-        map_table.add_column("ID", style="cyan")
-        map_table.add_column("Dimension", style="green")
+        # Add the required columns
+        progress_table.add_column("File", style="cyan")
+        progress_table.add_column("Status", style="green")
+        progress_table.add_column("Count", style="green")
         
-        for class_id, dimension in dimensions_map.items():
-            map_table.add_row(str(class_id), dimension)
-        
-        console.print(map_table)
-        
-        # Process with progress tracking
-        with Progress() as progress:
-            task = progress.add_task(
-                "[green]Processing images...",
-                total=len(list(Path(input).glob('*.[jp][pn][g]')))
-            )
+        # Validate input files first
+        image_paths = []
+        skipped_files = []
+        for ext in ('*.jpg', '*.jpeg', '*.png'):
+            found = list(Path(input).glob(ext))
+            for path in found:
+                try:
+                    with open(path, 'rb') as f:
+                        header = f.read(12)
+                        if any(header.startswith(sig) for sig in [b'\xFF\xD8', b'\x89PNG']):
+                            image_paths.append(path)
+                        else:
+                            skipped_files.append((path, "Not a valid image file"))
+                except Exception as e:
+                    skipped_files.append((path, str(e)))
+
+        if not image_paths:
+            if RICH_AVAILABLE:
+                console.print("[red]No valid images found in input folder.[/red]")
+            else:
+                click.echo("No valid images found in input folder.")
+            return
+
+        if RICH_AVAILABLE:
+            console.print(Panel.fit("[bold blue]Batch Inference Processing[/bold blue]"))
             
             stats = process_batch_inference(
                 input,
                 output,
                 dimensions_map,
-                progress
+                image_paths=image_paths,
+                skip_errors=skip_errors,
+                progress_table=progress_table  # Pass the table to the processing function
             )
-        
-        # Display results
-        display_batch_results(stats, console)
-        
-        console.print(f"\n[bold green]Results saved to:[/bold green] {output}")
-        
-    else:
-        # Non-rich version
-        logger.info("Processing images from: %s", input)
-        stats = process_batch_inference(input, output, dimensions_map)
-        logger.info("Processing complete:")
-        logger.info("- Processed %d images", stats['processed_images'])
-        logger.info("- Found %d bricks (%d valid, %d unknown)",
-                   stats['total_bricks'],
-                   stats['valid_bricks'],
-                   stats['unknown_bricks'])
-        logger.info("Results saved to: %s", output)
+            
+            # Display final results
+            display_batch_results(stats, console)
+            
+            # Show error summary if any
+            if stats.get('errors', []):
+                console.print("\n[yellow]Processing Errors:[/yellow]")
+                error_table = Table(show_header=True)
+                error_table.add_column("Image", style="cyan")
+                error_table.add_column("Error", style="red")
+                
+                for img, error in stats['errors'][:5]:
+                    error_table.add_row(Path(img).name, str(error))
+                if len(stats['errors']) > 5:
+                    error_table.add_row("...", f"... and {len(stats['errors']) - 5} more errors")
+                console.print(error_table)
+            
+            console.print(f"\n[bold green]Results saved to:[/bold green] {output}")
+            
+        else:
+            # Non-rich version
+            logger.info("Processing images from: %s", input)
+            logger.info("Found %d valid images (%d skipped)", 
+                       len(image_paths), len(skipped_files))
+            
+            stats = process_batch_inference(
+                input, output, dimensions_map, 
+                image_paths=image_paths,
+                skip_errors=skip_errors
+            )
+            
+            logger.info("Processing complete:")
+            logger.info("- Processed %d images", stats['processed_images'])
+            logger.info("- Found %d bricks (%d valid, %d unknown)",
+                       stats['total_bricks'],
+                       stats['valid_bricks'],
+                       stats['unknown_bricks'])
+            if stats.get('errors', []):
+                logger.warning("Encountered %d errors during processing", 
+                             len(stats['errors']))
+            logger.info("Results saved to: %s", output)
+            
+    except Exception as e:
+        if RICH_AVAILABLE:
+            console.print(f"[red]Error during batch processing: {str(e)}[/red]")
+        else:
+            logger.error("Error during batch processing: %s", str(e))
+        raise
 
 @cli.command('visualize-batch')
 @click.argument('metadata_json', type=click.Path(exists=True))
