@@ -53,6 +53,48 @@ def check_existing_annotations(image_paths: List[Path], output_folder: Path) -> 
             
     return to_process, already_processed
 
+def analyze_existing_annotations(
+    annotation_files: List[Path], 
+    dimensions_map: Dict
+) -> Dict:
+    """Analyze existing YOLO annotation files to gather statistics.
+    
+    Args:
+        annotation_files: List of paths to existing .txt annotation files
+        dimensions_map: Mapping of class IDs to dimensions
+        
+    Returns:
+        dict: Statistics from analyzing existing annotations
+    """
+    stats = {
+        'total_bricks': 0,
+        'valid_bricks': 0,
+        'class_distribution': {}
+    }
+    
+    for ann_file in annotation_files:
+        try:
+            with open(ann_file, 'r') as f:
+                lines = f.readlines()
+            
+            for line in lines:
+                parts = line.strip().split()
+                if len(parts) >= 5:  # Valid YOLO format
+                    class_id = int(parts[0])
+                    if str(class_id) in dimensions_map:
+                        dimension = dimensions_map[str(class_id)]
+                        stats['valid_bricks'] += 1
+                        stats['class_distribution'][dimension] = \
+                            stats['class_distribution'].get(dimension, 0) + 1
+                        
+            stats['total_bricks'] += len(lines)
+                        
+        except Exception as e:
+            logger.warning(f"Error analyzing {ann_file}: {e}")
+            continue
+            
+    return stats
+
 def process_batch_inference(
     input_folder, 
     output_folder, 
@@ -77,6 +119,7 @@ def process_batch_inference(
         dict: Processing statistics
     """
     stats = {
+        'total_images': 0,
         'processed_images': 0,
         'skipped_images': 0,  # Add counter for skipped images
         'total_bricks': 0,
@@ -109,40 +152,64 @@ def process_batch_inference(
         Layout(name="main")
     )
     
-    # Create and pre-populate stats table
-    stats_table = Table.grid(padding=(0,1))
+    # Create and pre-populate stats table with proper Row objects
+    stats_table = Table()
     stats_table.add_column("Metric", style="cyan", width=20)
     stats_table.add_column("Value", style="green")
     
-    # Add initial rows to prevent index errors
+    # Add rows using add_row() method instead of direct assignment
     stats_table.add_row("Status", "Initializing...")
     stats_table.add_row("Progress", "0/0")
     stats_table.add_row("Processing", "")
     stats_table.add_row("Valid Bricks", "0")
     stats_table.add_row("Skipped", str(stats['skipped_images']))
     stats_table.add_row("Errors", "0")
-    
+
     layout["main"].update(stats_table)
 
     total_images = len(to_process)
+    stats['total_images'] = total_images + stats['skipped_images']
+
     if total_images == 0:
         logger.info(f"No new images to process. {stats['skipped_images']} images already processed.")
         return stats
 
+    # Analyze previously skipped files
+    if stats['skipped_images'] > 0:
+        logger.info("Analyzing existing annotation files...")
+        existing_stats = analyze_existing_annotations(
+            [Path(output_folder) / f"{p.stem}.txt" for p in already_processed],
+            dimensions_map
+        )
+        
+        # Update final statistics
+        stats['total_bricks'] += existing_stats['total_bricks']
+        stats['valid_bricks'] += existing_stats['valid_bricks']
+        
+        # Merge class distributions
+        for dim, count in existing_stats['class_distribution'].items():
+            stats['class_distribution'][dim] = \
+                stats['class_distribution'].get(dim, 0) + count
+
     with Live(layout, refresh_per_second=4, transient=True) as live:
         for img_path in to_process:
             try:
-                # Update progress display safely
-                current_file = Path(img_path).name
-                stats_table.rows[0] = ("Status", f"Processing {current_file}")
-                stats_table.rows[1] = ("Progress", f"{stats['processed_images']}/{total_images}")
-                stats_table.rows[2] = ("Processing", str(img_path.name))
-                stats_table.rows[3] = ("Valid Bricks", str(stats['valid_bricks']))
-                stats_table.rows[4] = ("Skipped", str(stats['skipped_images']))
-                if stats['errors']:
-                    stats_table.rows[5] = ("Errors", f"[red]{len(stats['errors'])}[/red]")
+                # Create a new table for each update
+                updated_table = Table()
+                updated_table.add_column("Metric", style="cyan", width=20)
+                updated_table.add_column("Value", style="green")
                 
-                layout["main"].update(stats_table)
+                # Add rows with current values
+                current_file = Path(img_path).name
+                updated_table.add_row("Status", f"Processing {current_file}")
+                updated_table.add_row("Progress", f"{stats['processed_images']}/{total_images}")
+                updated_table.add_row("Processing", str(img_path.name))
+                updated_table.add_row("Valid Bricks", str(stats['valid_bricks']))
+                updated_table.add_row("Skipped", str(stats['skipped_images']))
+                updated_table.add_row("Errors", f"[red]{len(stats['errors'])}[/red]" if stats['errors'] else "0")
+                
+                layout["main"].update(updated_table)
+                live.refresh()
 
                 # Clean EXIF metadata with error handling
                 try:
