@@ -58,9 +58,6 @@ import utils.data_utils as data_utils
 from utils.batch_utils import process_batch_inference, display_batch_results
 from utils.visualization_utils import create_batch_visualization
 
-# Version information
-__version__ = "1.0.0"
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -74,16 +71,6 @@ logger = logging.getLogger(__name__)
 
 # Ensure logs directory exists
 os.makedirs("logs", exist_ok=True)
-
-def print_version(ctx, param, value):
-    """Print version information and exit."""
-    if not value or ctx.resilient_parsing:
-        return
-    if RICH_AVAILABLE:
-        console.print(f"[bold green]LEGO Bricks ML Vision[/bold green] version [yellow]{__version__}[/yellow]")
-    else:
-        click.echo(f"LEGO Bricks ML Vision version {__version__}")
-    ctx.exit()
 
 def validate_output_dir(ctx, param, value):
     """Validate and create output directory if it doesn't exist."""
@@ -136,16 +123,6 @@ def display_rich_help():
                 "--input PATH", "--output PATH", "--skip-errors"
             ])
         ],
-        "Training Commands": [
-            ("train", "Train detection models", [
-                "--mode [bricks|studs]", "--epochs INT", "--batch-size INT",
-                "--show-results/--no-show-results", "--cleanup/--no-cleanup",
-                "--force-extract", "--use-pretrained"
-            ]),
-            ("multiclass-demo-train", "Train a multiclass YOLO model on a custom dataset", [
-                "--dataset PATH", "--epochs INT", "--patience INT"
-            ])
-        ],
         "Data Processing": [
             ("data-processing labelme-to-yolo", "Convert LabelMe to YOLO format", [
                 "--input PATH"
@@ -171,8 +148,7 @@ def display_rich_help():
         "Utility Commands": [
             ("cleanup", "Clean temporary files", [
                 "--all", "--logs-only", "--cache-only", "--results-only"
-            ]),
-            ("version", "Show version information", [])
+            ])
         ]
     }
     
@@ -197,7 +173,6 @@ def display_rich_help():
     console.print(Panel(
         "[bold]Global Options:[/bold]\n" +
         "  [cyan]--debug/--no-debug[/cyan]  Enable debug output\n" +
-        "  [cyan]--version[/cyan]           Show version information\n" +
         "  [cyan]--help[/cyan]             Show this help message",
         title="Options",
         border_style="green"
@@ -207,8 +182,6 @@ def display_rich_help():
 
 @click.group()
 @click.option('--debug/--no-debug', default=False, help='Enable debug output.')
-@click.option('--version', is_flag=True, callback=print_version, expose_value=False, is_eager=True,
-              help='Show version information and exit.')
 def cli(debug):
     """LEGO Bricks ML Vision - Command Line Interface
     
@@ -555,173 +528,6 @@ def infer_cmd(image, output, save_annotated, force_run):
                 click.echo(f"Brick {i+1} dimension: {dimension}")
             click.echo(f"Results saved to: {img_output}")
 
-@cli.command('train')
-@click.option('--mode', type=click.Choice(['bricks', 'studs']), required=True,
-              help='Training mode: "bricks" or "studs".')
-@click.option('--epochs', type=int, default=20,
-              help='Number of training epochs.')
-@click.option('--batch-size', type=int, default=16,
-              help='Batch size for training.')
-@click.option('--show-results/--no-show-results', default=True,
-              help='Display results after training.')
-@click.option('--cleanup/--no-cleanup', default=True,
-              help='Remove cached datasets and logs after training.')
-@click.option('--force-extract', is_flag=True,
-              help='Force re-extraction of dataset.')
-@click.option('--use-pretrained', is_flag=True,
-              help='Use LEGO-trained model instead of YOLOv8n.')
-def train_cmd(mode, epochs, batch_size, show_results, cleanup, force_extract, use_pretrained):
-    """Train a detection model for either bricks or studs.
-    
-    This command runs the full training pipeline, including dataset preparation,
-    model training, and results export.
-    """
-    if RICH_AVAILABLE:
-        console.print(Panel.fit(f"[bold blue]Training {mode.capitalize()} Detection Model[/bold blue]"))
-        
-    # Import train module functions dynamically to avoid circular imports
-    from train import (
-        setup_logging, detect_hardware, setup_execution_structure,
-        unzip_dataset, validate_dataset, split_dataset, 
-        augment_data, select_model, train_model,
-        export_logs, zip_and_download_results, display_last_training_session
-    )
-    
-    # Set up training
-    setup_logging()
-    device = detect_hardware()
-    logger.info(f"Using device: {device}")
-    
-    # Run training pipeline
-    setup_execution_structure()
-    
-    if RICH_AVAILABLE:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
-            TextColumn("[bold green]{task.fields[percentage]:.0f}%"),
-            TimeElapsedColumn(),
-            console=console
-        ) as progress:
-            # Dataset preparation phase
-            prep_task = progress.add_task(
-                "[green]Preparing dataset...", 
-                total=100, 
-                percentage=0
-            )
-            
-            # Extract dataset
-            progress.update(prep_task, advance=10, percentage=10)
-            dataset_path = unzip_dataset(mode, force_extract)
-            
-            # Validate dataset
-            progress.update(prep_task, advance=10, percentage=20)
-            validate_dataset(mode)
-            
-            # Split dataset
-            progress.update(prep_task, advance=20, percentage=40)
-            dataset_yolo_path = split_dataset(mode)
-            
-            # Augment data
-            progress.update(prep_task, advance=20, percentage=60)
-            augment_data(dataset_yolo_path)
-            
-            # Select model
-            progress.update(prep_task, advance=10, percentage=70)
-            model_path = select_model(mode, use_pretrained)
-            
-            # Complete preparation
-            progress.update(prep_task, completed=100, percentage=100)
-            
-            # Training phase
-            train_task = progress.add_task(
-                f"[green]Training {mode} detection model...", 
-                total=100, 
-                percentage=0
-            )
-            
-            # Train model with external progress tracking
-            session_results = train_model(dataset_yolo_path, model_path, device, epochs, batch_size)
-            
-            # Complete training
-            progress.update(train_task, completed=100, percentage=100)
-            
-            # Results phase
-            results_task = progress.add_task(
-                "[green]Processing results...", 
-                total=100, 
-                percentage=0
-            )
-            
-            # Export logs
-            progress.update(results_task, advance=30, percentage=30)
-            export_logs()
-            
-            # Zip and prepare download
-            progress.update(results_task, advance=40, percentage=70)
-            zip_and_download_results()
-            
-            # Complete results
-            progress.update(results_task, completed=100, percentage=100)
-    else:
-        # Run without rich progress display
-        logger.info("Preparing dataset...")
-        dataset_path = unzip_dataset(mode, force_extract)
-        validate_dataset(mode)
-        dataset_yolo_path = split_dataset(mode)
-        augment_data(dataset_yolo_path)
-        model_path = select_model(mode, use_pretrained)
-        
-        logger.info(f"Training {mode} detection model...")
-        session_results = train_model(dataset_yolo_path, model_path, device, epochs, batch_size)
-        
-        logger.info("Processing results...")
-        export_logs()
-        zip_and_download_results()
-    
-    # Display training results if requested
-    if show_results:
-        if RICH_AVAILABLE:
-            console.print("\n[bold green]Training Results:[/bold green]")
-        else:
-            click.echo("\nTraining Results:")
-            
-        display_last_training_session(session_results)
-    
-    # Clean up if requested
-    if cleanup:
-        from train import cleanup_after_training
-        if RICH_AVAILABLE:
-            console.print("\n[yellow]Cleaning up temporary files...[/yellow]")
-        else:
-            click.echo("\nCleaning up temporary files...")
-        cleanup_after_training()
-    
-    if RICH_AVAILABLE:
-        console.print(Panel.fit("[bold green]Training completed successfully![/bold green]"))
-    else:
-        click.echo("Training completed successfully!")
-
-@cli.command('multiclass-demo-train')
-@click.option('--dataset', required=True, type=click.Path(exists=True),
-              help='Path to multiclass dataset (must contain images/ and labels/ folders)')
-@click.option('--epochs', default=50, type=int,
-              help='Number of training epochs')
-@click.option('--patience', default=3, type=int,
-              help='Early stopping patience')
-def multiclass_demo_train(dataset: str, epochs: int, patience: int):
-    """Train a multiclass YOLO model on a custom dataset."""
-    from utils.multiclass_training import train_multiclass_model
-    
-    try:
-        results = train_multiclass_model(dataset)
-        console.print("[bold green]Training completed successfully![/bold green]")
-        return results
-    except Exception as e:
-        console.print(f"[bold red]Training failed: {str(e)}[/bold red]")
-        raise click.Abort()
-
 @cli.group('data-processing')
 def data_processing():
     """Commands for dataset processing and visualization."""
@@ -1007,48 +813,6 @@ def cleanup_cmd(all_files, logs_only, cache_only, results_only):
         else:
             click.echo("Cleanup cancelled.")
 
-@cli.command('version')
-def version_cmd():
-    """Display version and system information."""
-    if RICH_AVAILABLE:
-        table = Table(title="LEGO Bricks ML Vision System Information")
-        table.add_column("Component", style="cyan")
-        table.add_column("Value", style="green")
-        
-        table.add_row("Version", __version__)
-        table.add_row("Python", sys.version.split()[0])
-        
-        import torch
-        if torch.cuda.is_available():
-            cuda_version = torch.version.cuda
-            device_name = torch.cuda.get_device_name(0)
-            table.add_row("CUDA", cuda_version)
-            table.add_row("GPU", device_name)
-        else:
-            table.add_row("CUDA", "Not available")
-            table.add_row("GPU", "Not available")
-            
-        import platform
-        table.add_row("OS", platform.platform())
-        
-        console.print(table)
-    else:
-        click.echo(f"LEGO Bricks ML Vision v{__version__}")
-        click.echo(f"Python: {sys.version.split()[0]}")
-        
-        import torch
-        if torch.cuda.is_available():
-            cuda_version = torch.version.cuda
-            device_name = torch.cuda.get_device_name(0)
-            click.echo(f"CUDA: {cuda_version}")
-            click.echo(f"GPU: {device_name}")
-        else:
-            click.echo("CUDA: Not available")
-            click.echo("GPU: Not available")
-            
-        import platform
-        click.echo(f"OS: {platform.platform()}")
-
 @cli.group('metadata')
 def metadata():
     """Commands for inspecting and managing image metadata."""
@@ -1324,9 +1088,10 @@ def visualize_batch_cmd(metadata_json, output, samples):
         except Exception as e:
             console.print(f"[red]Error creating visualizations: {e}[/red]")
 
-if __name__ == "__main__":
-    # Create logs directory if it doesn't exist
-    os.makedirs("logs", exist_ok=True)
-    
-    # Execute the CLI
-    cli()
+import click
+import logging
+from pathlib import Path
+from training.train_conf import TrainingConfig
+from training.train_data_preprocessing import DatasetPreprocessor
+from training.train_utils import ModelTrainer
+from training.train_results_handler import TrainingResultsHandler
