@@ -1088,3 +1088,5 @@ def visualize_batch_cmd(metadata_json, output, samples):
         except Exception as e:
             console.print(f"[red]Error creating visualizations: {e}[/red]")
 
+if __name__ == '__main__':
+    cli()
