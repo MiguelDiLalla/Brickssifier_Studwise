@@ -903,7 +903,7 @@ def train_model(dataset_path, model_path, device, epochs, batch_size, repo_root)
             patience=5,
             single_cls=True,
             exist_ok=True,
-            verbose=True
+            verbose=True # Use the detected mode as class name
         )
         logging.info("✅ Training completed successfully via Python API.")
         return os.path.join(results_dir, training_name)

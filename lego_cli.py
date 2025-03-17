@@ -1088,10 +1088,3 @@ def visualize_batch_cmd(metadata_json, output, samples):
         except Exception as e:
             console.print(f"[red]Error creating visualizations: {e}[/red]")
 
-import click
-import logging
-from pathlib import Path
-from training.train_conf import TrainingConfig
-from training.train_data_preprocessing import DatasetPreprocessor
-from training.train_utils import ModelTrainer
-from training.train_results_handler import TrainingResultsHandler
