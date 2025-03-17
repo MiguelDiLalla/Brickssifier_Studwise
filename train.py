@@ -276,7 +276,7 @@ def unzip_dataset(mode, force_extract=False):
     dataset_compressed_dir = os.path.join(repo_root, "presentation/Datasets_Compress")
     dataset_dir = os.path.join(repo_root, "cache/datasets")
     
-    dataset_filename = "LegoBricks_Dataset.zip" if mode == "bricks" else "BrickStuds_Dataset.zip"
+    dataset_filename = "bricks_dataset.zip" if mode == "bricks" else "studs_dataset.zip"
     dataset_path = os.path.join(dataset_compressed_dir, dataset_filename)
     extract_path = os.path.join(dataset_dir, mode)
 
@@ -294,98 +294,134 @@ def unzip_dataset(mode, force_extract=False):
 
 def validate_dataset(mode):
     """
-    Validates dataset integrity by dynamically detecting the images and labels folders,
-    ensuring image-label parity and file integrity.
+    Validates and cleans the unzipped dataset by:
+    1. Detecting images and labels folders
+    2. Removing corrupted images and invalid label files
+    3. Ensuring 1:1 image-label pairing
+    4. Logging all validation steps
 
     Args:
-        mode (str): 'bricks' or 'studs', defining dataset location.
-        
+        mode (str): 'bricks' or 'studs'.
+
     Returns:
-        tuple: A tuple containing (images_path, labels_path) if validation succeeds
-        
-    Raises:
-        FileNotFoundError: If image/label folders cannot be identified
-        ValueError: If image-label pairs are mismatched
-        
-    Notes:
-        - Automatically detects folder structure
-        - Standardizes folder names to "images" and "labels"
-        - Validates 1:1 mapping between images and labels
+        tuple: (images_path, labels_path) paths to valid dataset folders
     """
-    try:
-        repo_root = get_repo_root()
-        dataset_path = os.path.join(repo_root, "cache/datasets", mode)
+    logging.info(f"Starting dataset validation for {mode} mode")
+    
+    # Get paths
+    repo_root = get_repo_root()
+    dataset_path = os.path.join(repo_root, "cache/datasets", mode)
+    
+    # Find subfolders
+    subfolders = [f for f in os.listdir(dataset_path) 
+                  if os.path.isdir(os.path.join(dataset_path, f))]
+    
+    if len(subfolders) != 2:
+        logging.error(f"Expected 2 subfolders, found {len(subfolders)}")
+        raise ValueError("Invalid dataset structure")
 
-        # Check if dataset path exists
-        if not os.path.exists(dataset_path):
-            logging.error(f"Dataset path does not exist: {dataset_path}")
-            return os.path.join(dataset_path, "images"), os.path.join(dataset_path, "labels")
-
-        # Detect folders
-        subfolders = [os.path.join(dataset_path, d) for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))]
-
-        # Identify images and labels based on dominant file extensions
-        images_path, labels_path = None, None
-        for folder in subfolders:
-            files = os.listdir(folder)
-            jpg_count = sum(f.endswith('.jpg') for f in files)
-            txt_count = sum(f.endswith('.txt') for f in files)
-
-            if jpg_count > txt_count:
-                images_path = folder
-            elif txt_count > jpg_count:
-                labels_path = folder
-
-        # If paths are missing, use expected paths
-        expected_images_path = os.path.join(dataset_path, "images")
-        expected_labels_path = os.path.join(dataset_path, "labels")
+    # Detect images and labels folders
+    images_path = None
+    labels_path = None
+    
+    for folder in subfolders:
+        folder_path = os.path.join(dataset_path, folder)
+        sample_files = os.listdir(folder_path)[:5]  # Check first 5 files
         
-        if images_path is None or labels_path is None:
-            logging.error(f"Dataset structure invalid. Could not identify images and labels in {dataset_path}.")
-            return expected_images_path, expected_labels_path
+        # Check if folder contains images
+        if any(f.lower().endswith(('.jpg', '.jpeg', '.png')) for f in sample_files):
+            images_path = folder_path
+        # Check if folder contains text files
+        elif any(f.lower().endswith('.txt') for f in sample_files):
+            labels_path = folder_path
+    
+    if not images_path or not labels_path:
+        logging.error("Could not identify images and labels folders")
+        raise ValueError("Invalid dataset structure")
+        
+    logging.info(f"Detected - Images: {images_path}, Labels: {labels_path}")
 
-        # Rename folders to standard structure if needed
-        if images_path != expected_images_path:
-            if not os.path.exists(expected_images_path):  # Check if destination exists
-                os.rename(images_path, expected_images_path)
-                logging.info(f"Renamed {images_path} -> {expected_images_path}")
+    # Validate images
+    valid_images = []
+    for img in os.listdir(images_path):
+        if not img.lower().endswith(('.jpg')):
+            continue
+            
+        img_path = os.path.join(images_path, img)
+        try:
+            image = cv2.imread(img_path)
+            if image is None:
+                logging.warning(f"Removing corrupted image: {img}")
+                os.remove(img_path)
             else:
-                logging.warning(f"Cannot rename {images_path} to {expected_images_path} as destination already exists.")
+                valid_images.append(os.path.splitext(img)[0])
+        except Exception as e:
+            logging.warning(f"Error processing image {img}: {e}")
+            os.remove(img_path)
 
-        if labels_path != expected_labels_path:
-            if not os.path.exists(expected_labels_path):  # Check if destination exists
-                os.rename(labels_path, expected_labels_path)
-                logging.info(f"Renamed {labels_path} -> {expected_labels_path}")
+    # Validate labels
+    valid_labels = []
+    for label in os.listdir(labels_path):
+        if not label.endswith('.txt'):
+            continue
+            
+        label_path = os.path.join(labels_path, label)
+        try:
+            with open(label_path, 'r') as f:
+                lines = f.readlines()
+                
+            # Check YOLO format: each line should be "class x y w h"
+            format_errors = []
+            for line_num, line in enumerate(lines, 1):
+                if line.strip():  # Skip empty lines
+                    try:
+                        values = line.split()
+                        if len(values) != 5:
+                            format_errors.append(f"Line {line_num}: Expected 5 values, got {len(values)}")
+                        elif not all(0 <= float(x) <= 1 for x in values[1:]):
+                            format_errors.append(f"Line {line_num}: Values must be between 0 and 1")
+                    except ValueError:
+                        format_errors.append(f"Line {line_num}: Invalid number format")
+                
+            if not lines or format_errors:
+                if not lines:
+                    logging.warning(f"File was empty: {label}")
+                logging.warning(f"Removing invalid label file {label}:")
+                for error in format_errors:
+                    logging.warning(f"  {error}")
+                os.remove(label_path)
             else:
-                logging.warning(f"Cannot rename {labels_path} to {expected_labels_path} as destination already exists.")
+                valid_labels.append(Path(label).stem)
+                
+        except Exception as e:
+            logging.warning(f"Error processing label {label}: {e}")
+            os.remove(label_path)
 
-        # Create directories if they don't exist
-        os.makedirs(expected_images_path, exist_ok=True)
-        os.makedirs(expected_labels_path, exist_ok=True)
 
-        # Validate dataset integrity
-        image_files = sorted([f for f in os.listdir(expected_images_path) if f.endswith(".jpg")])
-        label_files = sorted([f for f in os.listdir(expected_labels_path) if f.endswith(".txt")])
-
-        if len(image_files) != len(label_files):
-            logging.error("Mismatch between number of images and labels.")
-            # Continue despite the mismatch
-        else:
-            for img, lbl in zip(image_files, label_files):
-                if os.path.splitext(img)[0] != os.path.splitext(lbl)[0]:
-                    logging.error(f"Mismatched pair: {img} and {lbl}")
-                    # Continue checking other pairs
-
-        logging.info(f"✅ Dataset validation completed for mode: {mode}")
+    # Ensure 1:1 pairing
+    valid_pairs = set(valid_images) & set(valid_labels)
+    orphaned_images = set(valid_images) - valid_pairs
+    orphaned_labels = set(valid_labels) - valid_pairs
+    
+    # Remove orphaned files
+    for orphan in orphaned_images:
+        os.remove(os.path.join(images_path, f"{orphan}.jpg"))
+    for orphan in orphaned_labels:
+        os.remove(os.path.join(labels_path, f"{orphan}.txt"))
         
-        # Return both paths regardless of validation success/failure
-        return expected_images_path, expected_labels_path
+    # Log statistics
+    logging.info(f"Dataset validation complete:")
+    logging.info(f"- Valid image-label pairs: {len(valid_pairs)}")
+    logging.info(f"- Removed images: {len(orphaned_images)}")
+    logging.info(f"- Removed labels: {len(orphaned_labels)}")
+    
+    if not valid_pairs:
+        logging.error("No valid image-label pairs found")
+        raise ValueError("Empty dataset after validation")
         
-    except Exception as e:
-        logging.error(f"Error during dataset validation: {e}")
-        # Return default paths even in case of exception
-        dataset_path = os.path.join(get_repo_root(), "cache/datasets", mode)
-        return os.path.join(dataset_path, "images"), os.path.join(dataset_path, "labels")
+    return images_path, labels_path
+        
+
 
 def create_dataset_structure(mode, repo_root):
     """
@@ -417,98 +453,100 @@ def create_dataset_structure(mode, repo_root):
     return output_dir
 
 def augment_data(dataset_path, augmentations=2):
-    """
-    Augments training dataset using Albumentations.
-
-    Args:
-        dataset_path (str): Path to YOLO dataset.
-        augmentations (int): Number of augmentations per image.
-        
-    Returns:
-        None
-        
-    Notes:
-        - Creates multiple variations of each training image
-        - Preserves label information for each augmented image
-        - Uses a robust set of transforms: flips, rotations, color adjustments
-    """
+    """Enhanced data augmentation with robust error handling."""
+    
+    # Setup paths and validation
     train_images_path = os.path.join(dataset_path, "dataset/images/train")
     train_labels_path = os.path.join(dataset_path, "dataset/labels/train")
     
-    logging.info(f"Starting data augmentation with {augmentations} variations per image")
-    logging.info(f"Source images path: {train_images_path}")
-    logging.info(f"Source labels path: {train_labels_path}")
-
-    image_files = [f for f in os.listdir(train_images_path) if f.endswith(".jpg")]
-    total_images = len(image_files)
-    logging.info(f"Found {total_images} images to augment")
-
-    augmentation_pipeline = A.Compose([
+    # Verify disk space
+    free_space = shutil.disk_usage(train_images_path).free
+    required_space = sum(os.path.getsize(os.path.join(train_images_path, f)) 
+                        for f in os.listdir(train_images_path))
+    if free_space < required_space * augmentations * 1.5:
+        raise RuntimeError("Insufficient disk space for augmentation")
+    
+    # Configure augmentation pipeline with bbox support
+    transform = A.Compose([
         A.HorizontalFlip(p=0.5),
         A.RandomBrightnessContrast(p=0.2),
         A.Rotate(limit=15, p=0.5),
         A.GaussianBlur(p=0.2),
         A.ColorJitter(p=0.2)
-    ])
-    logging.info(f"Configured augmentation pipeline with transforms: HorizontalFlip, RandomBrightnessContrast, Rotate, GaussianBlur, ColorJitter")
-
-    successful_augmentations = 0
-    skipped_images = 0
-    progress_interval = max(1, total_images // 10)  # Report progress after each 10%
-
-    for idx, img_file in enumerate(image_files):
-        if not img_file.endswith(".jpg"):
+    ], bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
+    
+    stats = {"processed": 0, "augmented": 0, "failed": 0}
+    
+    for img_file in os.listdir(train_images_path):
+        if not img_file.lower().endswith(('.jpg', '.jpeg', '.png')):
             continue
-
-        img_path = os.path.join(train_images_path, img_file)
-        label_path = os.path.join(train_labels_path, img_file.replace(".jpg", ".txt"))
-
-        # Report progress periodically
-        if (idx + 1) % progress_interval == 0:
-            logging.info(f"Progress: {idx + 1}/{total_images} images processed ({(idx + 1)/total_images:.1%})")
-
-        # ✅ Check if image exists
-        image = cv2.imread(img_path)
-        if image is None:
-            logging.warning(f"Skipping {img_file}: Unable to read image file.")
-            skipped_images += 1
-            continue
-
-        # Check if label exists
-        if not os.path.exists(label_path):
-            logging.warning(f"Skipping {img_file}: Label file not found at {label_path}")
-            skipped_images += 1
-            continue
-
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        logging.debug(f"Processing image: {img_file} (shape: {image.shape})")
-
-        for i in range(augmentations):
-            augmented = augmentation_pipeline(image=image)["image"]
-
-            # ✅ Ensure augmented image is NumPy array
-            if isinstance(augmented, torch.Tensor):
-                logging.debug(f"Converting tensor to NumPy array for {img_file}")
-                augmented = augmented.permute(1, 2, 0).cpu().numpy()
-                augmented = (augmented * 255).astype(np.uint8)
-
-            aug_img_name = img_file.replace(".jpg", f"_aug{i}.jpg")
-            aug_img_path = os.path.join(train_images_path, aug_img_name)
-            cv2.imwrite(aug_img_path, cv2.cvtColor(augmented, cv2.COLOR_RGB2BGR))
-
-            aug_label_name = img_file.replace(".jpg", f"_aug{i}.txt")
-            aug_label_path = os.path.join(train_labels_path, aug_label_name)
-            shutil.copy(label_path, aug_label_path)
             
-            successful_augmentations += 1
-            logging.debug(f"Created augmentation {i+1} for {img_file}: {aug_img_name}")
-
-    total_new_images = successful_augmentations
-    logging.info(f"✅ Data augmentation completed. Stats:")
-    logging.info(f"   - Original images processed: {total_images - skipped_images}")
-    logging.info(f"   - Images skipped: {skipped_images}")
-    logging.info(f"   - New augmented images created: {total_new_images}")
-    logging.info(f"   - Total dataset size now: {total_images + total_new_images}")
+        try:
+            # Load and validate image
+            img_path = os.path.join(train_images_path, img_file)
+            label_path = os.path.join(train_labels_path, 
+                                    os.path.splitext(img_file)[0] + '.txt')
+            
+            image = cv2.imread(img_path)
+            if image is None:
+                raise ValueError(f"Failed to load image: {img_file}")
+            
+            # Load and validate labels
+            bboxes = []
+            class_labels = []
+            if os.path.exists(label_path):
+                with open(label_path, 'r') as f:
+                    for line in f:
+                        cls_id, x, y, w, h = map(float, line.strip().split())
+                        bboxes.append([x, y, w, h])
+                        class_labels.append(cls_id)
+            
+            # Perform augmentations
+            for i in range(augmentations):
+                try:
+                    transformed = transform(image=image, bboxes=bboxes, 
+                                         class_labels=class_labels)
+                    
+                    aug_image = transformed['image']
+                    aug_bboxes = transformed['bboxes']
+                    aug_labels = transformed['class_labels']
+                    
+                    # Save augmented image
+                    aug_name = f"{os.path.splitext(img_file)[0]}_aug{i}{os.path.splitext(img_file)[1]}"
+                    cv2.imwrite(os.path.join(train_images_path, aug_name), aug_image)
+                    
+                    # Save augmented labels
+                    if bboxes:
+                        label_name = f"{os.path.splitext(img_file)[0]}_aug{i}.txt"
+                        with open(os.path.join(train_labels_path, label_name), 'w') as f:
+                            for bbox, cls_id in zip(aug_bboxes, aug_labels):
+                                f.write(f"{int(cls_id)} {' '.join(map(str, bbox))}\n")
+                    
+                    stats["augmented"] += 1
+                    
+                except Exception as e:
+                    logging.error(f"Failed augmentation {i} for {img_file}: {str(e)}")
+                    stats["failed"] += 1
+                    continue
+            
+            stats["processed"] += 1
+            
+            # Log progress
+            if stats["processed"] % 10 == 0:
+                logging.info(f"Progress: {stats['processed']} images processed, "
+                           f"{stats['augmented']} augmentations created, "
+                           f"{stats['failed']} failures")
+                
+        except Exception as e:
+            logging.error(f"Failed to process {img_file}: {str(e)}")
+            stats["failed"] += 1
+            continue
+    
+    # Final report
+    logging.info("Augmentation Complete:")
+    logging.info(f"  Images processed: {stats['processed']}")
+    logging.info(f"  Augmentations created: {stats['augmented']}")
+    logging.info(f"  Failed operations: {stats['failed']}")
 
 def dataset_split(mode, repo_root):
     """
@@ -525,8 +563,29 @@ def dataset_split(mode, repo_root):
     dataset_path = os.path.join(repo_root, "cache/datasets", mode)
     output_dir = os.path.join(repo_root, "cache/split", f"{mode}")
 
-    images_path = os.path.join(dataset_path, "images")
-    labels_path = os.path.join(dataset_path, "labels")
+    subfolders = [f for f in os.listdir(dataset_path)
+                  if os.path.isdir(os.path.join(dataset_path, f))]
+
+    # Detect images and labels folders
+    images_path = None
+    labels_path = None
+    
+    for folder in subfolders:
+        folder_path = os.path.join(dataset_path, folder)
+        sample_files = os.listdir(folder_path)[:5]  # Check first 5 files
+        
+        # Check if folder contains images
+        if any(f.lower().endswith(('.jpg', '.jpeg', '.png')) for f in sample_files):
+            images_path = folder_path
+        # Check if folder contains text files
+        elif any(f.lower().endswith('.txt') for f in sample_files):
+            labels_path = folder_path
+    
+    if not images_path or not labels_path:
+        logging.error("Could not identify images and labels folders")
+        raise ValueError("Invalid dataset structure")
+        
+    logging.info(f"Detected - Images: {images_path}, Labels: {labels_path}")
     
     logging.info(f"Source dataset: {dataset_path}")
     logging.info(f"Output directory: {output_dir}")
