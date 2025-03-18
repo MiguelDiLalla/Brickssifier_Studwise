@@ -27,10 +27,11 @@ from rich.progress import Progress
 from rich.console import Console
 from rich.prompt import Confirm
 import click
+import rich_click
 
-# Configure rich console and click
+# Configure rich console and rich-click
 console = Console()
-click.rich_click.USE_RICH = True
+rich_click.USE_RICH = True
 
 def setup_logging():
     """Configure rich logging with emojis"""
@@ -186,7 +187,6 @@ def train_model(yaml_path: Path, device: str, epochs: int = 100, batch_size: int
                 patience=5,
                 verbose=True
             )
-            progress.update(task, completed=epochs)
             logging.info("✅ Training completed successfully")
             return results_dir / training_name
             
