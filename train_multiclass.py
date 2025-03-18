@@ -139,7 +139,9 @@ def get_classes(dataset_path: Path) -> list:
     with open(metadata_path) as f:
         metadata = json.load(f)
     
-    classes = metadata["config"]["classes"]
+    classes_dict = metadata["config"]["classes"]
+    # Get class names in order of IDs
+    classes = [classes_dict[str(i)] for i in range(len(classes_dict))]
     logging.info(f"📋 Found {len(classes)} classes: {', '.join(classes)}")
     return classes
 
@@ -156,9 +158,11 @@ def create_dataset_yaml(dataset_path: Path, classes: list) -> Path:
     
     yaml_path = dataset_path / "dataset.yaml"
     with open(yaml_path, "w") as f:
-        yaml.dump(config, f, default_flow_style=False)
-        
+        yaml_content = yaml.dump(config, default_flow_style=False)
+        f.write(yaml_content)
+    
     logging.info(f"✅ Created dataset config at {yaml_path}")
+    logging.info("📄 Dataset YAML content:\n" + yaml_content)
     return yaml_path
 
 def train_model(yaml_path: Path, device: str, epochs: int = 100, batch_size: int = 16):
@@ -193,6 +197,31 @@ def train_model(yaml_path: Path, device: str, epochs: int = 100, batch_size: int
         except Exception as e:
             logging.error(f"❌ Training failed: {str(e)}")
             raise
+
+def zip_results(results_dir: Path) -> Path:
+    """Zip training results and save outside repository"""
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+    zip_name = f"multiclass_{timestamp}_results.zip"
+    
+    # Get parent directory of repository for saving zip
+    repo_root = Path(__file__).parent
+    output_dir = repo_root.parent
+    zip_path = output_dir / zip_name
+    
+    with Progress() as progress:
+        task = progress.add_task("📦 Zipping results...", total=None)
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(results_dir):
+                for file in files:
+                    file_path = Path(root) / file
+                    arcname = file_path.relative_to(results_dir)
+                    zipf.write(file_path, arcname)
+                    
+        progress.update(task, completed=True)
+    
+    logging.info(f"📦 Results archived to: {zip_path}")
+    return zip_path
 
 @click.group()
 def cli():
@@ -266,6 +295,10 @@ def train(epochs, batch_size, train_ratio, val_ratio, force_gpu, yes):
         # Train model
         results_dir = train_model(yaml_path, device, epochs, batch_size)
         logging.info(f"✨ Training pipeline completed. Results saved to {results_dir}")
+        
+        # Archive results
+        zip_path = zip_results(results_dir)
+        logging.info(f"✅ Training pipeline completed and results archived to {zip_path}")
         
     except Exception as e:
         logging.error(f"❌ Pipeline failed: {str(e)}")
