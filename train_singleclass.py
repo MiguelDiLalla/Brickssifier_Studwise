@@ -1,16 +1,16 @@
 """
-LEGO Bricks ML Vision - Multiclass Training Pipeline
-Specialized script for training multiclass LEGO brick detection model.
+LEGO Bricks ML Vision - Single-class Training Pipeline
+Specialized script for training single-class LEGO detection models (bricks or studs).
 
 Key features:
-- Fixed dataset path from presentation/Datasets_Compress/multiclass_dataset.zip 
-- Dynamic class mapping extraction from metadata JSON
+- Dual mode training for bricks or studs detection
+- Fixed dataset paths from presentation/Datasets_Compress/{mode}_dataset.zip 
+- Single class configuration for each mode
 - Data augmentation and splitting
 - Progress tracking with rich logging
 """
 
 import os
-import json
 import shutil
 import logging
 import zipfile
@@ -18,8 +18,6 @@ import random
 from pathlib import Path
 from datetime import datetime
 import yaml
-import cv2
-import numpy as np
 import torch
 from ultralytics import YOLO
 from rich.logging import RichHandler
@@ -55,10 +53,10 @@ def detect_hardware():
         else:
             raise SystemExit("Training cancelled by user")
 
-def extract_dataset(repo_root: Path) -> Path:
-    """Extract multiclass dataset from zip"""
-    source = repo_root / "presentation" / "Datasets_Compress" / "multiclass_dataset.zip"
-    destination = repo_root / "cache" / "datasets" / "multiclass"
+def extract_dataset(repo_root: Path, mode: str) -> Path:
+    """Extract single-class dataset from zip based on mode"""
+    source = repo_root / "presentation" / "Datasets_Compress" / f"{mode}_dataset.zip"
+    destination = repo_root / "cache" / "datasets" / mode
     
     if not source.exists():
         raise FileNotFoundError(f"Dataset not found at {source}")
@@ -86,17 +84,41 @@ def create_dataset_structure(dataset_path: Path, train_ratio=0.7, val_ratio=0.2)
         (dataset_path / "dataset" / "images" / split).mkdir(parents=True, exist_ok=True)
         (dataset_path / "dataset" / "labels" / split).mkdir(parents=True, exist_ok=True)
     
-    # Get files and check pairs
-    images = list((dataset_path / "images").glob("*.jpg"))
+    # Find subfolders
+    subfolders = [f for f in os.listdir(dataset_path) 
+                  if os.path.isdir(dataset_path / f)]
+    
+    # Detect images and labels folders
+    images_path = None
+    labels_path = None
+    
+    for folder in subfolders:
+        folder_path = dataset_path / folder
+        sample_files = os.listdir(folder_path)[:5]  # Check first 5 files
+        
+        # Check if folder contains images
+        if any(f.lower().endswith(('.jpg', '.jpeg', '.png')) for f in sample_files):
+            images_path = folder_path
+        elif any(f.lower().endswith('.txt') for f in sample_files):
+            labels_path = folder_path
+    
+    if not images_path or not labels_path:
+        raise ValueError("Could not identify images and labels folders in dataset")
+        
+    logging.info(f"Found image folder: {images_path}")
+    logging.info(f"Found labels folder: {labels_path}")
+    
+    # Get files and check pairs with proper path handling
+    images = list(Path(images_path).glob("*.jpg"))
     
     valid_pairs = []
     for img_path in images:
-        label_path = dataset_path / "labels" / f"{img_path.stem}.txt"
+        label_path = Path(labels_path) / f"{img_path.stem}.txt"
         if label_path.exists():
             valid_pairs.append((img_path, label_path))
     
     if not valid_pairs:
-        raise ValueError("No valid image-label pairs found")
+        raise ValueError(f"No valid image-label pairs found in {images_path} and {labels_path}")
     
     # Random split
     random.shuffle(valid_pairs)
@@ -109,7 +131,7 @@ def create_dataset_structure(dataset_path: Path, train_ratio=0.7, val_ratio=0.2)
         "test": valid_pairs[n_train + n_val:]
     }
     
-    # Move files to splits
+    # Move files to splits with proper path handling
     with Progress() as progress:
         task = progress.add_task("📊 Creating dataset splits...", total=len(valid_pairs))
         
@@ -117,11 +139,11 @@ def create_dataset_structure(dataset_path: Path, train_ratio=0.7, val_ratio=0.2)
             for img_path, label_path in pairs:
                 # Move image
                 dst_img = dataset_path / "dataset" / "images" / split / img_path.name
-                shutil.copy2(img_path, dst_img)
+                shutil.copy2(str(img_path), str(dst_img))
                 
                 # Move label
                 dst_label = dataset_path / "dataset" / "labels" / split / label_path.name
-                shutil.copy2(label_path, dst_label)
+                shutil.copy2(str(label_path), str(dst_label))
                 
                 progress.advance(task)
     
@@ -129,31 +151,15 @@ def create_dataset_structure(dataset_path: Path, train_ratio=0.7, val_ratio=0.2)
                 f"{len(splits_dict['val'])} val, {len(splits_dict['test'])} test")
     return dataset_path / "dataset"
 
-def get_classes(dataset_path: Path) -> list:
-    """Extract class names from metadata JSON"""
-    metadata_path = dataset_path / "labels" / "batch_inference_metadata.json"
-    
-    if not metadata_path.exists():
-        raise FileNotFoundError("Dataset metadata not found")
-        
-    with open(metadata_path) as f:
-        metadata = json.load(f)
-    
-    classes_dict = metadata["config"]["classes"]
-    # Get class names in order of IDs
-    classes = [classes_dict[str(i)] for i in range(len(classes_dict))]
-    logging.info(f"📋 Found {len(classes)} classes: {', '.join(classes)}")
-    return classes
-
-def create_dataset_yaml(dataset_path: Path, classes: list) -> Path:
+def create_dataset_yaml(dataset_path: Path, mode: str) -> Path:
     """Create YOLO dataset configuration file"""
     config = {
         "path": str(dataset_path),
         "train": "images/train", 
         "val": "images/val",
         "test": "images/test",
-        "nc": len(classes),
-        "names": classes
+        "nc": 1,  # Single class
+        "names": [mode]  # Class name is the mode (bricks or studs)
     }
     
     yaml_path = dataset_path / "dataset.yaml"
@@ -165,12 +171,12 @@ def create_dataset_yaml(dataset_path: Path, classes: list) -> Path:
     logging.info("📄 Dataset YAML content:\n" + yaml_content)
     return yaml_path
 
-def train_model(yaml_path: Path, device: str, epochs: int = 100, batch_size: int = 16):
-    """Train YOLOv8 model on multiclass dataset"""
+def train_model(yaml_path: Path, mode: str, device: str, epochs: int = 100, batch_size: int = 16):
+    """Train YOLOv8 model on single-class dataset"""
     model = YOLO("yolov8n.pt")
     
     # Setup training output directory
-    results_dir = Path.cwd() / "results" / "multiclass"
+    results_dir = Path.cwd() / "results" / mode
     results_dir.mkdir(parents=True, exist_ok=True)
     
     training_name = f"train_{datetime.now().strftime('%Y%m%d_%H%M')}"
@@ -198,10 +204,10 @@ def train_model(yaml_path: Path, device: str, epochs: int = 100, batch_size: int
             logging.error(f"❌ Training failed: {str(e)}")
             raise
 
-def zip_results(results_dir: Path) -> Path:
+def zip_results(results_dir: Path, mode: str) -> Path:
     """Zip training results and save outside repository"""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M')
-    zip_name = f"multiclass_{timestamp}_results.zip"
+    zip_name = f"{mode}_{timestamp}_results.zip"
     
     # Get parent directory of repository for saving zip
     repo_root = Path(__file__).parent
@@ -251,35 +257,38 @@ def check_and_clean_directories(repo_root: Path, yes: bool = False) -> None:
 
 @click.group()
 def cli():
-    """🚀 LEGO Bricks ML Vision - Multiclass Training Pipeline
+    """🚀 LEGO Bricks ML Vision - Single-class Training Pipeline
 
-    This tool provides commands for training a YOLOv8 model on multiclass LEGO brick detection.
-    The pipeline includes dataset preparation, training, and cleanup functionality.
+    This tool provides commands for training YOLOv8 models for single-class detection
+    of either LEGO bricks or studs. The pipeline includes dataset preparation,
+    training, and cleanup functionality.
 
     Example usage:
-        # Train a model with default parameters
-        python train_multiclass.py train
+        # Train a brick detection model with default parameters
+        python train_singleclass.py train --mode bricks
 
-        # Train with custom parameters
-        python train_multiclass.py train --epochs 200 --batch-size 32
+        # Train a stud detection model with custom parameters
+        python train_singleclass.py train --mode studs --epochs 200 --batch-size 32
 
         # Clean up training artifacts
-        python train_multiclass.py cleanup
+        python train_singleclass.py cleanup
     """
     pass
 
 @cli.command()
+@click.option('--mode', type=click.Choice(['bricks', 'studs'], case_sensitive=False), 
+              required=True, help='Training mode: bricks or studs detection')
 @click.option('--epochs', default=100, help='Number of training epochs')
 @click.option('--batch-size', default=16, help='Training batch size')
 @click.option('--train-ratio', default=0.7, type=float, help='Ratio of data for training (0-1)')
 @click.option('--val-ratio', default=0.2, type=float, help='Ratio of data for validation (0-1)')
 @click.option('--force-gpu', is_flag=True, help='Force GPU usage, exit if not available')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
-def train(epochs, batch_size, train_ratio, val_ratio, force_gpu, yes):
-    """🎯 Train a YOLOv8 model for multiclass LEGO brick detection.
+def train(mode, epochs, batch_size, train_ratio, val_ratio, force_gpu, yes):
+    """🎯 Train a YOLOv8 model for single-class LEGO detection.
 
     This command executes the complete training pipeline:
-    1. Extracts the multiclass dataset from presentation/Datasets_Compress
+    1. Extracts the dataset from presentation/Datasets_Compress/{mode}_dataset.zip
     2. Creates YOLO-compatible dataset structure with train/val/test splits
     3. Configures and trains a YOLOv8 model
     4. Saves results and model weights
@@ -291,7 +300,8 @@ def train(epochs, batch_size, train_ratio, val_ratio, force_gpu, yes):
     - Comprehensive logging
     
     Example usage:
-        train --epochs 150 --batch-size 32 --train-ratio 0.8 --val-ratio 0.1
+        train --mode bricks --epochs 150 --batch-size 32 --train-ratio 0.8
+        train --mode studs --epochs 100 --batch-size 16 --force-gpu
     """
     setup_logging()
     repo_root = Path(__file__).parent
@@ -314,19 +324,18 @@ def train(epochs, batch_size, train_ratio, val_ratio, force_gpu, yes):
             raise ValueError("Train and validation ratios must sum to less than 1.0")
         
         # Dataset preparation
-        dataset_path = extract_dataset(repo_root)
-        classes = get_classes(dataset_path)
+        dataset_path = extract_dataset(repo_root, mode)
         
         # Create YOLO structure
         yolo_dataset = create_dataset_structure(dataset_path, train_ratio, val_ratio)
-        yaml_path = create_dataset_yaml(yolo_dataset, classes)
+        yaml_path = create_dataset_yaml(yolo_dataset, mode)
         
         # Train model
-        results_dir = train_model(yaml_path, device, epochs, batch_size)
+        results_dir = train_model(yaml_path, mode, device, epochs, batch_size)
         logging.info(f"✨ Training pipeline completed. Results saved to {results_dir}")
         
         # Archive results
-        zip_path = zip_results(results_dir)
+        zip_path = zip_results(results_dir, mode)
         logging.info(f"✅ Training pipeline completed and results archived to {zip_path}")
         
     except Exception as e:
