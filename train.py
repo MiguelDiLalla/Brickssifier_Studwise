@@ -652,10 +652,12 @@ def dataset_split(mode, repo_root):
     dataset_yaml = {
         "path": output_dir,
         "train": "dataset/images/train",
-        "val": "dataset/images/val",
+        "val": "dataset/images/val", 
         "test": "dataset/images/test",
         "nc": 1,
-        "names": ["lego_brick"] if mode == "bricks" else ["lego_stud"]
+        "names": {
+            0: "brick" if mode == "bricks" else "stud"
+        }
     }
 
     yaml_path = os.path.join(output_dir, "dataset.yaml")
