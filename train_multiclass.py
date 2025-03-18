@@ -26,9 +26,11 @@ from rich.logging import RichHandler
 from rich.progress import Progress
 from rich.console import Console
 from rich.prompt import Confirm
+import click
 
-# Configure rich console
+# Configure rich console and click
 console = Console()
+click.rich_click.USE_RICH = True
 
 def setup_logging():
     """Configure rich logging with emojis"""
@@ -192,30 +194,134 @@ def train_model(yaml_path: Path, device: str, epochs: int = 100, batch_size: int
             logging.error(f"❌ Training failed: {str(e)}")
             raise
 
-def main():
-    """Main training pipeline"""
+@click.group()
+def cli():
+    """🚀 LEGO Bricks ML Vision - Multiclass Training Pipeline
+
+    This tool provides commands for training a YOLOv8 model on multiclass LEGO brick detection.
+    The pipeline includes dataset preparation, training, and cleanup functionality.
+
+    Example usage:
+        # Train a model with default parameters
+        python train_multiclass.py train
+
+        # Train with custom parameters
+        python train_multiclass.py train --epochs 200 --batch-size 32
+
+        # Clean up training artifacts
+        python train_multiclass.py cleanup
+    """
+    pass
+
+@cli.command()
+@click.option('--epochs', default=100, help='Number of training epochs')
+@click.option('--batch-size', default=16, help='Training batch size')
+@click.option('--train-ratio', default=0.7, type=float, help='Ratio of data for training (0-1)')
+@click.option('--val-ratio', default=0.2, type=float, help='Ratio of data for validation (0-1)')
+@click.option('--force-gpu', is_flag=True, help='Force GPU usage, exit if not available')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
+def train(epochs, batch_size, train_ratio, val_ratio, force_gpu, yes):
+    """🎯 Train a YOLOv8 model for multiclass LEGO brick detection.
+
+    This command executes the complete training pipeline:
+    1. Extracts the multiclass dataset from presentation/Datasets_Compress
+    2. Creates YOLO-compatible dataset structure with train/val/test splits
+    3. Configures and trains a YOLOv8 model
+    4. Saves results and model weights
+
+    The training process includes:
+    - Automatic hardware detection (GPU/CPU)
+    - Progress tracking with rich formatting
+    - Early stopping for optimal results
+    - Comprehensive logging
+    
+    Example usage:
+        train --epochs 150 --batch-size 32 --train-ratio 0.8 --val-ratio 0.1
+    """
     setup_logging()
     repo_root = Path(__file__).parent
     
     try:
-        # Setup and validation
-        device = detect_hardware()
+        # Hardware setup with force-gpu option
+        if force_gpu and not torch.cuda.is_available():
+            raise SystemExit("GPU required but not available")
+        
+        if not yes and not force_gpu:
+            device = detect_hardware()
+        else:
+            device = "0" if torch.cuda.is_available() else "cpu"
+        
+        # Validate split ratios
+        if train_ratio + val_ratio >= 1.0:
+            raise ValueError("Train and validation ratios must sum to less than 1.0")
         
         # Dataset preparation
         dataset_path = extract_dataset(repo_root)
         classes = get_classes(dataset_path)
         
         # Create YOLO structure
-        yolo_dataset = create_dataset_structure(dataset_path)
+        yolo_dataset = create_dataset_structure(dataset_path, train_ratio, val_ratio)
         yaml_path = create_dataset_yaml(yolo_dataset, classes)
         
         # Train model
-        results_dir = train_model(yaml_path, device)
+        results_dir = train_model(yaml_path, device, epochs, batch_size)
         logging.info(f"✨ Training pipeline completed. Results saved to {results_dir}")
         
     except Exception as e:
         logging.error(f"❌ Pipeline failed: {str(e)}")
         raise SystemExit(1)
 
+@cli.command()
+@click.option('--all', '-a', 'clean_all', is_flag=True, help='Remove all cache and results')
+@click.option('--cache', is_flag=True, help='Remove only cache directory')
+@click.option('--results', is_flag=True, help='Remove only results directory')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompts')
+def cleanup(clean_all, cache, results, yes):
+    """🧹 Clean up training artifacts and temporary files.
+
+    This command helps manage disk space by removing training artifacts:
+    - Cache directory: Contains extracted datasets and temporary files
+    - Results directory: Contains training results, models, and logs
+
+    You can specify which directories to clean:
+    --all     : Remove both cache and results directories
+    --cache   : Remove only the cache directory
+    --results : Remove only the results directory
+
+    Example usage:
+        cleanup --all -y  # Remove everything without confirmation
+        cleanup --cache   # Remove only cache with confirmation
+    """
+    setup_logging()
+    repo_root = Path(__file__).parent
+    
+    # Determine directories to clean
+    to_clean = []
+    if clean_all or cache:
+        to_clean.append(repo_root / "cache")
+    if clean_all or results:
+        to_clean.append(repo_root / "results")
+    
+    if not to_clean:
+        logging.error("❌ Please specify what to clean: --all, --cache, or --results")
+        return
+    
+    # Confirm cleanup
+    if not yes:
+        dirs_str = ", ".join(str(d) for d in to_clean)
+        if not Confirm.ask(f"⚠️ This will remove: {dirs_str}. Continue?"):
+            logging.info("Cleanup cancelled")
+            return
+    
+    # Perform cleanup
+    for path in to_clean:
+        if path.exists():
+            shutil.rmtree(path)
+            logging.info(f"✅ Removed {path}")
+        else:
+            logging.warning(f"⚠️ Directory not found: {path}")
+    
+    logging.info("🧹 Cleanup completed")
+
 if __name__ == "__main__":
-    main()
+    cli()
