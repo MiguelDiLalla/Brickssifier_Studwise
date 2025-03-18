@@ -15,8 +15,8 @@ Key features:
   - Detailed logging with emoji markers
 
 Usage examples:
-  - Use CLI interface: python lego_cli.py train --mode bricks
   - Direct API: from train import train_model, setup_logging
+  - Through notebooks: See Train_Pipeline.ipynb for interactive usage
 
 Author: Miguel DiLalla
 """
@@ -47,45 +47,54 @@ import pandas as pd
 # =============================================================================
 
 class EmojiFormatter(logging.Formatter):
-    """Custom formatter that adds emoji markers to log messages based on level."""
+    """Custom formatter that adds context-aware emoji markers to log messages.
+    
+    Enhances log readability with ML-specific emojis for different stages:
+    - Dataset operations: 📂 🔍 
+    - Training events: 🚀 📈
+    - Hardware/Setup: 💻 ⚙️
+    - Results/Evaluation: 📊 📋
+    - Errors/Warnings: ❌ ⚠️
+    """
     def format(self, record):
         base_msg = super().format(record)
+        
+        # Define emoji mappings based on message content
+        dataset_keywords = ['dataset', 'images', 'labels', 'augment']
+        training_keywords = ['epoch', 'training', 'model', 'batch']
+        hardware_keywords = ['gpu', 'cuda', 'device', 'cpu']
+        results_keywords = ['results', 'evaluation', 'metrics']
+        
+        msg_lower = record.msg.lower()
+        
+        # Select contextual emoji
         if record.levelno >= logging.ERROR:
             emoji = "❌"
         elif record.levelno >= logging.WARNING:
             emoji = "⚠️"
-        elif record.levelno >= logging.INFO:
-            emoji = "✅"
+        elif any(kw in msg_lower for kw in dataset_keywords):
+            emoji = "📂"
+        elif any(kw in msg_lower for kw in training_keywords):
+            emoji = "🚀"
+        elif any(kw in msg_lower for kw in hardware_keywords):
+            emoji = "💻"
+        elif any(kw in msg_lower for kw in results_keywords):
+            emoji = "📊"
         else:
-            emoji = "💬"
+            emoji = "✅"
+            
         return f"{base_msg} {emoji}"
 
-# Define a simple config loader function
-def load_config():
-    """
-    Simple configuration loader for the notebook demo.
-    
-    Returns:
-        dict: Configuration dictionary with training parameters
-        
-    Note:
-        This function could be moved to train.py for better organization.
-    """
-    return {
-        "training": {
-            "batch_size": 16,
-            "epochs": 50,
-            "device": "auto",
-            "use_pretrained": True
-        }
-    }
-
 def setup_logging():
-    """
-    Configures structured logging for train.py with emoji markers.
+    """Configure rich logging with context-aware emojis and color coding.
     
-    Sets up both console and file handlers with consistent formatting.
-    Creates 'logs' directory if it doesn't exist.
+    Features:
+        - Emoji indicators for different operation types
+        - Color-coded log levels
+        - Both console and file output
+        - Automatic log directory creation
+        
+    The logging configuration is global and will be used by all module functions.
     """
     log_dir = "logs"
     os.makedirs(log_dir, exist_ok=True)
@@ -93,23 +102,26 @@ def setup_logging():
     
     formatter = EmojiFormatter("%(asctime)s - %(levelname)s - %(message)s")
     
+    # Console handler with color support
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     
+    # File handler for persistent logs
     file_handler = logging.FileHandler(log_file, mode="a")
     file_handler.setFormatter(formatter)
     
-    # Clear existing handlers to enforce our configuration
+    # Reset any existing handlers
     logger = logging.getLogger()
     if logger.hasHandlers():
         logger.handlers.clear()
     
+    # Configure global logging
     logging.basicConfig(
         level=logging.INFO,
         handlers=[stream_handler, file_handler]
     )
     
-    logging.info("Logging initialized for training pipeline")
+    logging.info("ML Training pipeline initialized with enhanced logging")
 
 # =============================================================================
 # Environment Setup
@@ -258,19 +270,27 @@ def export_logs(log_name="train_session"):
 # =============================================================================
 
 def unzip_dataset(mode, force_extract=False):
-    """
-    Extracts the dataset from the repository's compressed files.
+    """Extracts and prepares the LEGO detection dataset for training.
+
+    This function handles dataset extraction from compressed archives while implementing
+    caching to avoid redundant extractions. Dataset archives should be located in 
+    the 'presentation/Datasets_Compress' directory.
 
     Args:
-        mode (str): 'bricks' or 'studs'.
-        force_extract (bool): If True, forces re-extraction even if dataset exists.
-        
+        mode (str): Detection mode, either 'bricks' or 'studs'.
+        force_extract (bool, optional): Force re-extraction even if cache exists.
+
     Returns:
-        str: Path to the extracted dataset
-        
+        str: Path to the extracted dataset root directory.
+
+    Example:
+        >>> dataset_path = unzip_dataset('bricks')
+        >>> print(f"Dataset extracted to: {dataset_path}")
+
     Notes:
-        - Checks if dataset was previously extracted to avoid redundant work
-        - Creates necessary directories automatically
+        - Expects ZIP archives named 'bricks_dataset.zip' or 'studs_dataset.zip'
+        - Creates cache/datasets/{mode} directory structure
+        - Preserves original compressed archives
     """
     repo_root = get_repo_root()
     dataset_compressed_dir = os.path.join(repo_root, "presentation/Datasets_Compress")
@@ -293,18 +313,33 @@ def unzip_dataset(mode, force_extract=False):
     return extract_path
 
 def validate_dataset(mode):
-    """
-    Validates and cleans the unzipped dataset by:
-    1. Detecting images and labels folders
-    2. Removing corrupted images and invalid label files
-    3. Ensuring 1:1 image-label pairing
-    4. Logging all validation steps
+    """Validates and sanitizes the YOLO format detection dataset.
+
+    Performs comprehensive dataset validation including:
+    1. Structure verification (images + labels folders)
+    2. Image integrity checks (corrupt file detection)
+    3. YOLO annotation format validation  
+    4. Image-label pair consistency
+    5. Automatic cleanup of invalid files
 
     Args:
-        mode (str): 'bricks' or 'studs'.
+        mode (str): Detection mode, either 'bricks' or 'studs'.
 
     Returns:
-        tuple: (images_path, labels_path) paths to valid dataset folders
+        tuple(str, str): Paths to validated (images_dir, labels_dir).
+
+    Raises:
+        ValueError: If dataset structure is invalid or no valid pairs found.
+
+    Example:
+        >>> img_dir, lbl_dir = validate_dataset('bricks')
+        >>> print(f"Valid pairs found in {img_dir} and {lbl_dir}")
+
+    Notes:
+        - Removes corrupt images
+        - Removes malformed label files
+        - Ensures 1:1 image-label correspondence
+        - Provides detailed validation statistics
     """
     logging.info(f"Starting dataset validation for {mode} mode")
     
@@ -424,18 +459,37 @@ def validate_dataset(mode):
 
 
 def create_dataset_structure(mode, repo_root):
-    """
-    Creates necessary dataset directories for YOLO.
-    
+    """Creates YOLO-compatible dataset directory structure.
+
+    Generates standardized directory layout required by YOLO:
+    ```
+    dataset/
+    ├── images/
+    │   ├── train/
+    │   ├── val/
+    │   └── test/
+    └── labels/
+        ├── train/
+        ├── val/
+        └── test/
+    ```
+
     Args:
-        mode (str): 'bricks' or 'studs', defining dataset name
-        
+        mode (str): Detection mode, either 'bricks' or 'studs'
+        repo_root (Path): Repository root path for relative directory creation
+
     Returns:
-        Path: Path to the created dataset structure root
-        
+        Path: Root path of created dataset structure
+
+    Example:
+        >>> repo_root = get_repo_root()
+        >>> dataset_dir = create_dataset_structure('bricks', repo_root)
+        >>> print(f"YOLO structure created at {dataset_dir}")
+
     Notes:
-        - Creates standard YOLO folder structure with train/val/test splits
-        - Separate directories for images and labels
+        - Creates cache/split/{mode} root directory
+        - Sets up parallel image and label folders
+        - Maintains train/val/test split organization
     """
     output_dir = repo_root / "cache" / "split" / f"{mode}"
     yolo_dirs = [
@@ -453,7 +507,35 @@ def create_dataset_structure(mode, repo_root):
     return output_dir
 
 def augment_data(dataset_path, augmentations=2):
-    """Enhanced data augmentation with robust error handling."""
+    """Performs robust data augmentation on the training dataset.
+    
+    Applies a sequence of image augmentations while preserving YOLO annotation format:
+    - Horizontal flips
+    - Random brightness/contrast
+    - Rotation (±15 degrees)
+    - Gaussian blur
+    - Color jitter
+
+    Args:
+        dataset_path (str): Path to the YOLO dataset root
+        augmentations (int, optional): Number of augmented copies per image. Defaults to 2.
+
+    Example:
+        >>> augment_data('path/to/dataset', augmentations=3)
+        >>> # Creates 3 augmented versions of each training image
+
+    Warning:
+        - Requires sufficient disk space (original_size * augmentations * 1.5)
+        - Only augments training set images
+        - Skips corrupted images while continuing processing
+
+    Notes:
+        - Uses Albumentations for efficient augmentation
+        - Maintains YOLO bbox coordinates
+        - Provides detailed progress tracking
+        - Generates augmentation statistics
+        - Implements robust error handling
+    """
     
     # Setup paths and validation
     train_images_path = os.path.join(dataset_path, "dataset/images/train")
@@ -760,21 +842,26 @@ def display_dataset_info(mode):
 # =============================================================================
 
 def select_model(mode, use_pretrained=False):
-    """
-    Selects a pre-trained model from the repository or defaults to YOLOv8n.
+    """Selects appropriate YOLOv8 model for LEGO detection training.
+    
+    Provides smart model selection based on detection mode:
+    - Can use pre-trained LEGO-specific models for transfer learning
+    - Falls back to YOLOv8n for fresh training
+    - Validates model file existence and accessibility
 
     Args:
-        mode (str): 'bricks' or 'studs'.
-        use_pretrained (bool): If True, selects a LEGO-trained model, else defaults to YOLOv8n.
+        mode (str): Detection target ('bricks' or 'studs')
+        use_pretrained (bool): Whether to use LEGO pre-trained weights
 
     Returns:
-        str: Path to the selected model checkpoint.
-        
+        str: Path to selected model weights file
+
+    Example:
+        >>> model_path = select_model('bricks', use_pretrained=True)
+        >>> print(f"Selected model: {model_path}")
+
     Raises:
-        FileNotFoundError: If requested model file is not found
-        
-    Notes:
-        - Falls back to YOLOv8n if use_pretrained is False
+        FileNotFoundError: If requested pre-trained model is missing
     """
     repo_root = get_repo_root()
     
@@ -811,24 +898,43 @@ def save_model(model, output_dir, model_name="trained_model.pt"):
     return model_save_path
 
 def train_model(dataset_path, model_path, device, epochs, batch_size, repo_root):
-    """
-    Trains the YOLOv8 model with robust error handling and fallback mechanisms.
-    
+    """Trains YOLOv8 model for LEGO detection with robust error handling.
+
+    Implements a complete training pipeline with:
+    - Input validation and path checking
+    - Automatic mode detection from dataset
+    - Primary training via Python API
+    - CLI-based fallback mechanism
+    - Comprehensive logging and error capture
+    - Results organization with timestamps
+
     Args:
-        dataset_path (str): Path to the dataset directory
-        model_path (str): Path to the model file or pre-trained model name
-        device (str): Training device specification (e.g., "0" or "cpu")
+        dataset_path (str): Path to YOLO dataset root
+        model_path (str): Path to model file or YOLOv8 preset name
+        device (str): Training device spec ("0", "cpu", etc.)
         epochs (int): Number of training epochs
-        batch_size (int): Batch size for training
-        repo_root (str): Path to the repository root directory
-        
+        batch_size (int): Training batch size
+        repo_root (str): Repository root path
+
     Returns:
-        str: Path to the directory containing training results
-        
+        str: Path to training results directory
+
+    Example:
+        >>> results = train_model(
+        ...     dataset_path='data/bricks',
+        ...     model_path='yolov8n.pt',
+        ...     device='0',
+        ...     epochs=50,
+        ...     batch_size=16,
+        ...     repo_root=repo_path
+        ... )
+        >>> print(f"Training completed, results at: {results}")
+
     Notes:
-        - Attempts CLI method first then falls back to Python API if needed
-        - Validates paths before execution to provide helpful error messages
-        - Results are saved with timestamped directory names
+        - Uses early stopping with patience=5
+        - Enables single_cls for specialized detection
+        - Creates timestamped results folders
+        - Preserves both stdout and stderr logs
     """
     logging.info(f"🚀 Starting training with model: {model_path}")
     
@@ -963,15 +1069,27 @@ def train_model(dataset_path, model_path, device, epochs, batch_size, repo_root)
 # =============================================================================
 
 def zip_and_download_results(results_dir=None, output_filename=None):
-    """
-    Compresses the results directory into a ZIP file and provides a download link.
+    """Archives training results and provides download access.
+
+    Creates a comprehensive training archive including:
+    - Training metrics and plots
+    - Model weights and configs
+    - Log files and metadata
+    - Validation image samples
 
     Args:
-        results_dir (str, optional): The path to the results folder.
-        output_filename (str, optional): Name of the output zip file.
-        
-    Returns:
-        None
+        results_dir (str, optional): Results directory to archive
+        output_filename (str, optional): Name for ZIP archive
+
+    Example:
+        >>> zip_and_download_results('path/to/results')
+        >>> # Creates downloadable ZIP with all training artifacts
+
+    Notes:
+        - Auto-detects results directory if not specified
+        - Includes session logs from logs/ directory
+        - Returns IPython FileLink for notebook downloads
+        - Validates source paths and handles errors
     """
     if results_dir is None:
         results_dir = os.path.join(os.getcwd(), "results")
@@ -1007,9 +1125,26 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 
 def display_last_training_session(session_dir):
-    """
-    Displays all files from the specified training session directory with organized grids
-    and rich formatting.
+    """Visualizes training results with rich formatting and organization.
+    
+    Provides a comprehensive training results display:
+    - Metric plots in organized grids
+    - Training batch visualizations
+    - CSV data in formatted tables
+    - Configuration files with syntax highlighting
+
+    Args:
+        session_dir (str): Path to training session directory
+
+    Example:
+        >>> display_last_training_session('results/latest_training')
+        >>> # Shows complete training visualization dashboard
+
+    Notes:
+        - Auto-scales plot grids based on file count
+        - Uses Rich for terminal-based formatting
+        - Implements parallel image loading
+        - Handles missing or corrupt files gracefully
     """
     if not os.path.exists(session_dir):
         logging.error(f"Results directory not found: {session_dir}")
