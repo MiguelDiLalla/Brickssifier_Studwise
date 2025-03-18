@@ -1,14 +1,14 @@
 # Core ML & Data Science
-numpy>=1.20.0
-torch>=1.10.0
-torchvision>=0.11.0
-opencv-python>=4.5.0
-Pillow>=8.0.0
-matplotlib>=3.3.0
-pandas>=1.3.0
+numpy>=1.22.0
+torch>=2.0.0
+torchvision>=0.15.0
+opencv-python>=4.9.0
+Pillow>=10.0.0
+matplotlib>=3.7.0
+pandas>=2.0.0
 
 # YOLO Implementation
-ultralytics>=8.0.0
+ultralytics>=8.1.0
 
 # Image Processing & Metadata
 piexif>=1.1.3
@@ -17,12 +17,12 @@ piexif>=1.1.3
 albumentations>=2.0.5
 
 # CLI & Utilities
-click>=8.0.0
-rich>=10.0.0
+click>=8.1.0
+rich>=13.0.0
 rich-click>=1.6.0  # Enhanced Click CLI with Rich formatting
 pyyaml>=6.0.0
-ipython>=7.0.0
+ipython>=8.0.0
 
 # Testing Dependencies
-pytest>=7.0.0
-pytest-cov>=4.0.0
+pytest>=7.4.0
+pytest-cov>=4.1.0

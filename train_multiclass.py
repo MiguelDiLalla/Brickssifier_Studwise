@@ -143,9 +143,6 @@ def train_model(dataset_yaml, device, epochs, batch_size, augment_mode):
     with Progress() as progress:
         task = progress.add_task("🚀 Training model...", total=epochs)
         
-        def on_train_epoch_end(trainer):
-            progress.update(task, advance=1)
-        
         results = model.train(
             data=dataset_yaml,
             epochs=epochs,
@@ -157,9 +154,12 @@ def train_model(dataset_yaml, device, epochs, batch_size, augment_mode):
             pretrained=True,
             patience=7,
             augment=True,
-            verbose=False,
-            callbacks={"on_train_epoch_end": on_train_epoch_end}
+            verbose=True,
+            classes=None  # Use all classes from dataset
         )
+        
+        # Update progress after training
+        progress.update(task, completed=epochs)
     
     logging.info("✅ Training completed successfully")
     return results
