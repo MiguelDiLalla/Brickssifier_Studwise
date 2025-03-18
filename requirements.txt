@@ -19,6 +19,7 @@ albumentations>=1.0.0
 # CLI & Utilities
 click>=8.0.0
 rich>=10.0.0
+rich-click>=1.6.0  # Enhanced Click CLI with Rich formatting
 pyyaml>=6.0.0
 ipython>=7.0.0
 
