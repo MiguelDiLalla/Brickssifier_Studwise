@@ -3,10 +3,47 @@
 LEGO Bricks ML Vision - Command Line Interface
 
 This module provides a comprehensive CLI for the LEGO Bricks ML Vision project,
-integrating detection, training, and data processing capabilities.
+offering commands for brick detection, stud analysis, and data processing.
 
-Usage:
-    lego_cli.py [OPTIONS] COMMAND [ARGS]...
+Key Features:
+    - Brick Detection: Identify LEGO bricks in images
+    - Stud Detection: Analyze stud patterns on bricks
+    - Dimension Classification: Determine brick dimensions
+    - Batch Processing: Handle multiple images efficiently
+    - Data Processing: Convert and validate annotations
+    - Metadata Management: Handle image EXIF data
+
+Available Commands:
+    detect-bricks: Detect LEGO bricks in images
+    detect-studs: Detect studs on LEGO bricks
+    infer: Run complete detection pipeline
+    data-processing:
+        - labelme-to-yolo: Convert LabelMe annotations to YOLO format
+        - keypoints-to-bboxes: Convert keypoints to bounding boxes
+        - visualize: Display annotations on images
+        - demo-conversion: Generate conversion pipeline demonstration
+    metadata:
+        - inspect: View image metadata
+        - clean-batch: Clean metadata from images
+    batch-inference: Process multiple images
+    cleanup: Manage temporary files
+
+Usage Examples:
+    # Detect bricks in an image
+    lego_cli.py detect-bricks --image path/to/image.jpg --conf 0.3
+
+    # Run full inference pipeline
+    lego_cli.py infer --image path/to/image.jpg
+
+    # Convert annotations
+    lego_cli.py data-processing labelme-to-yolo --input path/to/json
+
+Dependencies:
+    - click: CLI framework
+    - rich: Enhanced terminal output
+    - OpenCV: Image processing
+    - PIL: EXIF metadata handling
+    - PyTorch/YOLO: ML model inference
 
 Author: Miguel DiLalla
 """

@@ -16,6 +16,9 @@ piexif>=1.1.3
 # Data Augmentation
 albumentations>=2.0.5
 
+# GUI
+PyQt5>=5.15.0
+
 # CLI & Utilities
 click>=8.1.0
 rich>=13.0.0
