@@ -1003,27 +1003,21 @@ input_folder/
   └── subfolder/
       └── image3.jpg
 
-All images in folder and subfolders will be processed.''')
-@click.option('--output', type=click.Path(),
-              help='''Output folder for batch results.
-              
-Created structure:
-output_folder/
-  ├── image1/
-  │   ├── bricks/
-  │   ├── studs/
-  │   └── summary.json
-  ├── image2/
-  │   └── ...
-  └── batch_summary.json
-
-If not specified, creates timestamped folder in results/.''')
-@click.option('--conf', type=float, default=None,
-              help='''Detection confidence threshold (0.0-1.0).
-              
-Applied to both brick and stud detection.
-Lower values may increase false positives.
-Higher values may miss some detections.
+def display_rich_help() -> bool:
+    """Display rich formatted help for CLI commands.
+    
+    Returns:
+        True if help was displayed, False otherwise
+    """
+    if not RICH_AVAILABLE:
+        return False
+        
+    try:
+        console = Console()
+        
+        # Create main help panel
+        help_text = """
+        🧱 LEGO Bricks ML Vision - CLI Tools
 
 Default: 0.25 (from config)''')
 @click.option('--skip-errors', is_flag=True,
