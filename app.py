@@ -312,7 +312,7 @@ def create_tab_content(tab_name):
             clean_test_images_metadata(tab_type)
             st.session_state['current_tab'] = tab_name
 
-        col1, col2 = st.columns([1, 1])
+        col2, col1 = st.columns([1, 1])
         
         with col1:
             st.subheader("Input Image")
