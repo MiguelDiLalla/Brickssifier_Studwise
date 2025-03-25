@@ -254,16 +254,9 @@ def detect_bricks_cmd(image, output, conf, save_annotated, save_json, clean_exif
     This command runs the brick detection model on the specified image(s)
     and saves the results.
 
-    Arguments:
-        --image PATH          Input image or directory [required]
-        --output PATH        Output directory (default: ./results/brick_detection)
-        --conf FLOAT         Detection confidence threshold (default: 0.25)
-        --save-annotated     Save visualization of detections (default: True)
-        --save-json         Save detection results as JSON (default: False)
-        --clean-exif        Remove EXIF metadata before processing (default: False)
-
-    Example:
-        lego_cli.py detect-bricks --image photos/test.jpg --conf 0.3 --save-json
+    Returns a dict with:
+        - annotated_image: Image with detection visualization
+        - metadata: Complete metadata dictionary
     """
     if RICH_AVAILABLE:
         console.print(Panel.fit("[bold blue]LEGO Brick Detection[/bold blue]"))
@@ -286,6 +279,8 @@ def detect_bricks_cmd(image, output, conf, save_annotated, save_json, clean_exif
     if not images_to_process:
         logger.error("No images found to process.")
         sys.exit(1)
+
+    last_result = None  # Store the last processed result
         
     for img_path in images_to_process:
         logger.info(f"Processing image: {img_path}")
@@ -355,6 +350,15 @@ def detect_bricks_cmd(image, output, conf, save_annotated, save_json, clean_exif
         else:
             click.echo(f"Results saved to: {img_output}")
 
+        last_result = result  # Update the last processed result
+
+    # Return a standardized output dict for the last processed image
+    if last_result:
+        return {
+            "annotated_image": last_result.get("annotated_image"),
+            "metadata": last_result.get("metadata", {})
+        }
+
 @cli.command('detect-studs')
 @click.option('--image', required=True, type=click.Path(exists=True),
               help='Path to input image or directory of images.')
@@ -371,6 +375,10 @@ def detect_studs_cmd(image, output, conf, save_annotated, clean_exif):
     
     This command runs the stud detection model on the specified brick image(s),
     counts the studs, and classifies the brick dimensions.
+
+    Returns a dict with:
+        - annotated_image: Image with detection visualization and dimension labels
+        - metadata: Complete metadata dictionary including dimension classification
     """
     if RICH_AVAILABLE:
         console.print(Panel.fit("[bold blue]LEGO Stud Detection & Classification[/bold blue]"))
@@ -393,6 +401,8 @@ def detect_studs_cmd(image, output, conf, save_annotated, clean_exif):
     if not images_to_process:
         logger.error("No images found to process.")
         sys.exit(1)
+
+    last_result = None  # Store the last processed result
         
     for img_path in images_to_process:
         logger.info(f"Processing image: {img_path}")
@@ -451,6 +461,15 @@ def detect_studs_cmd(image, output, conf, save_annotated, clean_exif):
         else:
             click.echo(f"Brick Dimension: {dimension}")
             click.echo(f"Results saved to: {img_output}")
+            
+        last_result = result  # Update the last processed result
+
+    # Return a standardized output dict for the last processed image
+    if last_result:
+        return {
+            "annotated_image": last_result.get("annotated_image"),
+            "metadata": last_result.get("metadata", {})
+        }
 
 @cli.command('infer')
 @click.option('--image', required=True, type=click.Path(exists=True),
@@ -465,6 +484,9 @@ def infer_cmd(image, output, save_annotated, force_run):
     """Run the full inference pipeline: brick detection, stud detection, and classification.
     
     This command runs the complete analysis pipeline on the input image(s).
+
+    Returns a dict with:
+        - composite_image: Final annotated image combining all detection stages
     """
     if RICH_AVAILABLE:
         console.print(Panel.fit("[bold blue]LEGO Full Inference Pipeline[/bold blue]"))
@@ -487,6 +509,8 @@ def infer_cmd(image, output, save_annotated, force_run):
     if not images_to_process:
         logger.error("No images found to process.")
         sys.exit(1)
+
+    last_result = None  # Store the last processed result
         
     for img_path in images_to_process:
         logger.info(f"Processing image: {img_path}")
@@ -537,7 +561,7 @@ def infer_cmd(image, output, save_annotated, force_run):
             logger.error(f"Inference failed for {img_path}")
             continue
             
-        # Count detected bricks and get dimension info
+        # Count detected bricks and get dimension info for display
         brick_results = result.get("brick_results", {})
         studs_results = result.get("studs_results", [])
         
@@ -564,6 +588,14 @@ def infer_cmd(image, output, save_annotated, force_run):
                 dimension = stud_result.get("dimension", "Unknown")
                 click.echo(f"Brick {i+1} dimension: {dimension}")
             click.echo(f"Results saved to: {img_output}")
+
+        last_result = result  # Update the last processed result
+
+    # Return a dict with just the composite_image from the last processed result
+    if last_result:
+        return {
+            "composite_image": last_result.get("composite_image")
+        }
 
 @cli.group('data-processing')
 def data_processing():

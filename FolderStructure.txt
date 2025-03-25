@@ -1,38 +1,42 @@
 - LEGO_Bricks_ML_Vision
-  FolderStructure.txt (modified 1.8 minutes ago)
-  GenerateStructure.ps1 (modified 0 minutes ago)
-  lego_cli.py (modified 2.1 days ago)
-  LICENSE (modified 53 days ago)
-  LogoComposition.psd (modified 26.1 days ago)
-  model_utils_draft.jpg (modified 21 days ago)
-  Project_Logo.png (modified 26.1 days ago)
-  pytest.ini (modified 14.1 days ago)
-  README.md (modified 8.9 days ago)
-  render_metadate_func_draft.jpg (modified 20.2 days ago)
-  requirements.txt (modified 8.9 days ago)
-  train.py (modified 12.9 minutes ago)
-  yolov8n.pt (modified 4.3 days ago)
+  augmentation.py (modified 9 days ago)
+  FolderStructure.txt (modified 9.8 days ago)
+  GenerateStructure.ps1 (modified 9.8 days ago)
+  lego_cli.py (modified 2.9 days ago)
+  LegoProjectUtils.py (modified 2.8 minutes ago)
+  LICENSE (modified 62.8 days ago)
+  LogoComposition.psd (modified 35.9 days ago)
+  model_utils_draft.jpg (modified 30.8 days ago)
+  Project_Logo.png (modified 35.9 days ago)
+  pytest.ini (modified 23.9 days ago)
+  README.md (modified 18.7 days ago)
+  render_metadate_func_draft.jpg (modified 30 days ago)
+  requirements.txt (modified 3.9 days ago)
+  train_multiclass.py (modified 4.8 days ago)
+  train_singleclass.py (modified 4.8 days ago)
+  train.py (modified 5 days ago)
+  yolov8n.pt (modified 14.1 days ago)
   - __pycache__
   - .github
   - .pytest_cache
-    CACHEDIR.TAG (modified 14.1 days ago)
-    README.md (modified 14.1 days ago)
+    CACHEDIR.TAG (modified 23.9 days ago)
+    README.md (modified 23.9 days ago)
     - v
       - cache
-        lastfailed (modified 4.2 days ago)
-        nodeids (modified 9 days ago)
-        stepwise (modified 1.4 hours ago)
+        lastfailed (modified 8.7 days ago)
+        nodeids (modified 8.7 days ago)
+        stepwise (modified 2.6 minutes ago)
   - .vscode
-    settings.json (modified 14 days ago)
+    settings.json (modified 23.8 days ago)
   - cache
   - configs
-    train_config.yaml (modified 4.3 days ago)
+    train_config.yaml (modified 14.1 days ago)
   - data
     - annotations
       - export test
         More than 20 files, summary:
-          .jpg: 80 files
           .png: 1 files
+          .jpg: 80 files
           .json: 1 files
       - LabelMe_json_files_bricks
         More than 20 files, summary:
@@ -61,9 +65,9 @@
         More than 20 files, summary:
           .txt: 1803 files
     - Multiclass_Bricks_dataset
-      batch_visualization_20250313_183339_batch_1.jpg (modified 41.7 minutes ago)
-      batch_visualization_20250313_183340_batch_2.jpg (modified 41.7 minutes ago)
-      batch_visualization_20250313_183340_batch_3.jpg (modified 41.7 minutes ago)
+      batch_visualization_20250313_183339_batch_1.jpg (modified 9.8 days ago)
+      batch_visualization_20250313_183340_batch_2.jpg (modified 9.8 days ago)
+      batch_visualization_20250313_183340_batch_3.jpg (modified 9.8 days ago)
       - images
         More than 20 files, summary:
           .jpg: 1803 files
@@ -78,133 +82,324 @@
       - LabelMe_txt_studs
         More than 20 files, summary:
           .txt: 2176 files
+    - Protect_versions
+      lego_cli.py (modified 3.9 days ago)
+      Train_Pipeline_EXECUTED.ipynb (modified 5 days ago)
+      train.py (modified 5 days ago)
+      - utils
+        __init__.py (modified 18.6 days ago)
+        batch_utils.py (modified 9.9 days ago)
+        classification_utils.py (modified 12 days ago)
+        config_utils.py (modified 11.9 days ago)
+        data_utils.py (modified 12.1 days ago)
+        detection_utils.py (modified 12 days ago)
+        exif_utils.py (modified 18.7 days ago)
+        metadata_utils.py (modified 18.7 days ago)
+        multiclass_training.py (modified 11.8 days ago)
+        pipeline_utils.py (modified 18.7 days ago)
+        rich_utils.py (modified 14 days ago)
+        text_utils.py (modified 23.8 days ago)
+        visualization_utils.py (modified 3.8 days ago)
+        - __pycache__
     - raw
       More than 20 files, summary:
-        .jpg: 1803 files
         .png: 7 files
+        .jpg: 1803 files
   - docs
-    Technical_Guide.md (modified 3 days ago)
-    - Legacy_docs
-      App_Initial_prompt.md (modified 32.2 days ago)
-      LEGO_Bricks_Identification_Project_Overview.pdf (modified 53 days ago)
-      LEGO_Bricks_Identification_Project_Technical_Report.pdf (modified 53 days ago)
-      LEGO_Bricks_Project_Miguel_Di_Lalla.md (modified 54.3 days ago)
-      migration_guide.md (modified 8.9 days ago)
-      Refurbishing_Project_doc_withCODE.pdf (modified 53 days ago)
-      Refurbishing_Project_doc.pdf (modified 53 days ago)
-      Rewind_latex_doc.pdf (modified 53 days ago)
-      train_py_func_dependencies_map.png (modified 32.1 days ago)
-      train_py_refactoring.md (modified 32.1 days ago)
+    Lego_CLI_Guide.md (modified 3.9 days ago)
+    Monolithic_vs_Modular.md (modified 3.6 days ago)
+    Multiclass_Training_Guide.md (modified 4.8 days ago)
+    ProjectUtilsGuide.md (modified 2.8 days ago)
+    Singleclass_Training_Guide.md (modified 4.8 days ago)
+    Storyline_Project_Storytell.md (modified 2.9 days ago)
+    Technical_CLI_Guide.md (modified 2.9 days ago)
+    Training_API_Guide.md (modified 8.9 days ago)
+    Training-Refactorization-guide.md (modified 8.8 days ago)
+    Util_API_guide.md (modified 8.9 days ago)
   - logs
+    utils.log (modified 9.1 minutes ago)
   - models
-    Brick_Model_best20250123_192838t.pt (modified 49 days ago)
-    bricks_model_kaggle50epoch_10032025.pt (modified 4.2 days ago)
-    Stud_Model_best20250124_170824.pt (modified 48.1 days ago)
-    studs_model_kaggle50epoch_10032025.pt (modified 4.2 days ago)
+    Brick_Model_best20250123_192838t.pt (modified 58.8 days ago)
+    bricks_model_kaggle50epoch_10032025.pt (modified 14 days ago)
+    Stud_Model_best20250124_170824.pt (modified 57.9 days ago)
+    studs_model_kaggle50epoch_10032025.pt (modified 14 days ago)
   - notebooks
-    Inference_Pipeline.ipynb (modified 28.2 minutes ago)
-    multiclass_train_experiment.ipynb (modified 2 days ago)
-    Train_Pipeline.ipynb (modified 4 days ago)
+    Inference_Pipeline_RECHARGED.ipynb (modified 3.6 days ago)
+    Inference_Pipeline.ipynb (modified 3 days ago)
+    multiclass_train_experiment.ipynb (modified 6.7 days ago)
+    Multiclass_trining_example.ipynb (modified 3.8 days ago)
+    Train_Pipeline_EXECUTED.ipynb (modified 4.9 days ago)
+    Train_Pipeline_POLISH.ipynb (modified 4.9 days ago)
+    Train_Pipeline.ipynb (modified 5.9 days ago)
+    Train_Pipeline.md (modified 6.8 days ago)
+    UtilsShowcases.ipynb (modified 3.6 days ago)
+    - images
     - Legacy_notebooks
-      LEGO_Bricks_Identification_Project_Overview.ipynb (modified 53 days ago)
-      LEGO_Bricks_Identification_Project_Technical_Report.ipynb (modified 52.8 days ago)
-      LEGO_Bricks_Project_Miguel_Di_Lalla.ipynb (modified 54.3 days ago)
-      LEGO_MachineVision_refactorTest.ipynb (modified 24.1 days ago)
-      notebook_test_foldersTree.txt (modified 27.9 days ago)
-      Technical_Report.ipynb (modified 52.7 days ago)
-      Technical_Report.md (modified 52.8 days ago)
-      TrainTest.ipynb (modified 50.2 days ago)
-      tree_structure.txt (modified 49 days ago)
-      Utilities_dev.ipynb (modified 20.9 days ago)
+      LEGO_Bricks_Identification_Project_Overview.ipynb (modified 62.8 days ago)
+      LEGO_Bricks_Identification_Project_Technical_Report.ipynb (modified 62.6 days ago)
+      LEGO_Bricks_Project_Miguel_Di_Lalla.ipynb (modified 64.1 days ago)
+      LEGO_MachineVision_refactorTest.ipynb (modified 33.9 days ago)
+      notebook_test_foldersTree.txt (modified 37.7 days ago)
+      Technical_Report.ipynb (modified 62.5 days ago)
+      Technical_Report.md (modified 62.6 days ago)
+      TrainTest.ipynb (modified 60 days ago)
+      tree_structure.txt (modified 58.8 days ago)
+      Utilities_dev.ipynb (modified 30.7 days ago)
+    - LEGO_Bricks_ML_Vision
+      augmentation.py (modified 3.6 days ago)
+      FolderStructure.txt (modified 3.6 days ago)
+      GenerateStructure.ps1 (modified 3.6 days ago)
+      lego_cli.py (modified 3.6 days ago)
+      LegoProjectUtils.py (modified 3.6 days ago)
+      LICENSE (modified 3.6 days ago)
+      LogoComposition.psd (modified 3.6 days ago)
+      model_utils_draft.jpg (modified 3.6 days ago)
+      Project_Logo.png (modified 3.6 days ago)
+      pytest.ini (modified 3.6 days ago)
+      README.md (modified 3.6 days ago)
+      render_metadate_func_draft.jpg (modified 3.6 days ago)
+      requirements.txt (modified 3.6 days ago)
+      train_multiclass.py (modified 3.6 days ago)
+      train_singleclass.py (modified 3.6 days ago)
+      train.py (modified 3.6 days ago)
+      yolov8n.pt (modified 3.6 days ago)
+      - .github
+      - configs
+        train_config.yaml (modified 3.6 days ago)
+      - docs
+        Lego_CLI_Guide.md (modified 3.6 days ago)
+        Multiclass_Training_Guide.md (modified 3.6 days ago)
+        ProjectUtilsGuide.md (modified 3.6 days ago)
+        Singleclass_Training_Guide.md (modified 3.6 days ago)
+        Training_API_Guide.md (modified 3.6 days ago)
+        Training-Refactorization-guide.md (modified 3.6 days ago)
+        Util_API_guide.md (modified 3.6 days ago)
+      - models
+        Brick_Model_best20250123_192838t.pt (modified 3.6 days ago)
+        bricks_model_kaggle50epoch_10032025.pt (modified 3.6 days ago)
+        Stud_Model_best20250124_170824.pt (modified 3.6 days ago)
+        studs_model_kaggle50epoch_10032025.pt (modified 3.6 days ago)
+      - notebooks
+        Inference_Pipeline.ipynb (modified 3.6 days ago)
+        multiclass_train_experiment.ipynb (modified 3.6 days ago)
+        Multiclass_trining_example.ipynb (modified 3.6 days ago)
+        Train_Pipeline_EXECUTED.ipynb (modified 3.6 days ago)
+        Train_Pipeline_POLISH.ipynb (modified 3.6 days ago)
+        Train_Pipeline.ipynb (modified 3.6 days ago)
+        Train_Pipeline.md (modified 3.6 days ago)
+      - presentation
+        logo.png (modified 3.6 days ago)
+        - Datasets_Compress
+          bricks_dataset.zip (modified 3.6 days ago)
+          multiclass_dataset.zip (modified 3.6 days ago)
+          studs_dataset.zip (modified 3.6 days ago)
+        - Models_DEMO
+          Brick_Model_best20250123_192838t.pt (modified 3.6 days ago)
+          bricks_model_kaggle50epoch_10032025.pt (modified 3.6 days ago)
+          Multiclass_Model_best20250318.pt (modified 3.6 days ago)
+          Stud_Model_best20250124_170824.pt (modified 3.6 days ago)
+          studs_model_kaggle50epoch_10032025.pt (modified 3.6 days ago)
+        - MulticlassResults
+          More than 20 files, summary:
+            .png: 7 files
+            .jpg: 11 files
+            .0: 1 files
+            .yaml: 1 files
+            .csv: 1 files
+          - weights
+            best.pt (modified 3.6 days ago)
+            last.pt (modified 3.6 days ago)
+        - Test_images
+          - BricksPics
+            image_10.jpg (modified 3.6 days ago)
+            image_14.jpg (modified 3.6 days ago)
+            image_277.jpg (modified 3.6 days ago)
+            image_605.jpg (modified 3.6 days ago)
+            image_668.jpg (modified 3.6 days ago)
+            image_696.jpg (modified 3.6 days ago)
+            image_699.jpg (modified 3.6 days ago)
+            image_701.jpg (modified 3.6 days ago)
+          - StudsPics
+            image_10_LegoBrick_0_c87.jpg (modified 3.6 days ago)
+            image_113_LegoBrick_2_c82.jpg (modified 3.6 days ago)
+            image_119_LegoBrick_1_c77.jpg (modified 3.6 days ago)
+            image_139_LegoBrick_0_c86.jpg (modified 3.6 days ago)
+            image_200_LegoBrick_0_c83.jpg (modified 3.6 days ago)
+            image_223_LegoBrick_1_c81.jpg (modified 3.6 days ago)
+            image_223_LegoBrick_2_c78.jpg (modified 3.6 days ago)
+            image_224_LegoBrick_0_c83.jpg (modified 3.6 days ago)
+            image_226_LegoBrick_2_c77.jpg (modified 3.6 days ago)
+            image_228_LegoBrick_0_c82.jpg (modified 3.6 days ago)
+            image_23_LegoBrick_0_c81.jpg (modified 3.6 days ago)
+            image_253_LegoBrick_0_c82.jpg (modified 3.6 days ago)
+            image_259_LegoBrick_1_c86.jpg (modified 3.6 days ago)
+            image_28_LegoBrick_0_c88.jpg (modified 3.6 days ago)
+            image_315_LegoBrick_0_c81.jpg (modified 3.6 days ago)
+            image_319_LegoBrick_0_c78.jpg (modified 3.6 days ago)
+            image_361_LegoBrick_3_c80.jpg (modified 3.6 days ago)
+            image_62_LegoBrick_1_c84.jpg (modified 3.6 days ago)
+            image_7_LegoBrick_1_c87.jpg (modified 3.6 days ago)
+            image_73_LegoBrick_1_c85.jpg (modified 3.6 days ago)
+        - Test_Labels
+          - LabelMe_jsons
+            image_103.json (modified 3.6 days ago)
+            image_1197.json (modified 3.6 days ago)
+            image_1205.json (modified 3.6 days ago)
+            image_1208.json (modified 3.6 days ago)
+            image_136.json (modified 3.6 days ago)
+            image_1543.json (modified 3.6 days ago)
+            image_1552.json (modified 3.6 days ago)
+            image_1556.json (modified 3.6 days ago)
+            image_1729.json (modified 3.6 days ago)
+            image_1734.json (modified 3.6 days ago)
+            image_196.json (modified 3.6 days ago)
+            image_286.json (modified 3.6 days ago)
+            image_504.json (modified 3.6 days ago)
+            image_512.json (modified 3.6 days ago)
+            image_834.json (modified 3.6 days ago)
+            image_841.json (modified 3.6 days ago)
+            image_93.json (modified 3.6 days ago)
+          - LabelMe_keypoints
+            image_1_LegoBrick_6_c66.json (modified 3.6 days ago)
+            image_10_LegoBrick_0_c87.json (modified 3.6 days ago)
+            image_180_LegoBrick_2_c82.json (modified 3.6 days ago)
+            image_181_LegoBrick_2_c75.json (modified 3.6 days ago)
+            image_641_LegoBrick_0_c85.json (modified 3.6 days ago)
+            image_641_LegoBrick_1_c84.json (modified 3.6 days ago)
+            image_643_LegoBrick_2_c84.json (modified 3.6 days ago)
+            image_87_LegoBrick_4_c72.json (modified 3.6 days ago)
+            image_89_LegoBrick_1_c81.json (modified 3.6 days ago)
+      - scripts
+        AlgorithmicClassificationUI.py (modified 3.6 days ago)
+        Exif_UserComment_renderer.py (modified 3.6 days ago)
+        Export_notebook.py (modified 3.6 days ago)
+        ModelFastInference.py (modified 3.6 days ago)
+        ModelFastInferenceUI_LAYOUT.md (modified 3.6 days ago)
+      - utils
+        __init__.py (modified 3.6 days ago)
+        batch_utils.py (modified 3.6 days ago)
+        classification_utils.py (modified 3.6 days ago)
+        config_utils.py (modified 3.6 days ago)
+        data_utils.py (modified 3.6 days ago)
+        detection_utils.py (modified 3.6 days ago)
+        exif_utils.py (modified 3.6 days ago)
+        metadata_utils.py (modified 3.6 days ago)
+        multiclass_training.py (modified 3.6 days ago)
+        pipeline_utils.py (modified 3.6 days ago)
+        rich_utils.py (modified 3.6 days ago)
+        text_utils.py (modified 3.6 days ago)
+        visualization_utils.py (modified 3.6 days ago)
     - logs
   - presentation
-    logo.png (modified 26.2 days ago)
+    logo.png (modified 36 days ago)
     - Datasets_Compress
-      BrickStuds_Dataset.zip (modified 36.2 days ago)
-      LegoBricks_Dataset.zip (modified 36.2 days ago)
+      bricks_dataset.zip (modified 46 days ago)
+      multiclass_dataset.zip (modified 8.9 days ago)
+      studs_dataset.zip (modified 46 days ago)
     - Models_DEMO
-      Brick_Model_best20250123_192838t.pt (modified 49 days ago)
-      bricks_model_kaggle50epoch_10032025.pt (modified 4.2 days ago)
-      Stud_Model_best20250124_170824.pt (modified 48.1 days ago)
-      studs_model_kaggle50epoch_10032025.pt (modified 4.2 days ago)
+      Brick_Model_best20250123_192838t.pt (modified 58.8 days ago)
+      bricks_model_kaggle50epoch_10032025.pt (modified 14 days ago)
+      Multiclass_Model_best20250318.pt (modified 4.8 days ago)
+      Stud_Model_best20250124_170824.pt (modified 57.9 days ago)
+      studs_model_kaggle50epoch_10032025.pt (modified 14 days ago)
+    - MulticlassResults
+      More than 20 files, summary:
+        .md: 1 files
+        .jpg: 11 files
+        .0: 1 files
+        .csv: 1 files
+        .yaml: 1 files
+        .png: 7 files
+      - weights
+        best.pt (modified 4.8 days ago)
+        last.pt (modified 4.8 days ago)
     - Test_images
       - BricksPics
-        image_10.jpg (modified 30.5 minutes ago)
-        image_14.jpg (modified 30.5 minutes ago)
-        image_277.jpg (modified 30.5 minutes ago)
-        image_605.jpg (modified 30.5 minutes ago)
-        image_668.jpg (modified 30.5 minutes ago)
-        image_696.jpg (modified 30.5 minutes ago)
-        image_699.jpg (modified 30.5 minutes ago)
-        image_701.jpg (modified 30.5 minutes ago)
+        image_10.jpg (modified 3 days ago)
+        image_14.jpg (modified 3 days ago)
+        image_277.jpg (modified 3 days ago)
+        image_605.jpg (modified 2.8 days ago)
+        image_668.jpg (modified 3 days ago)
+        image_696.jpg (modified 3 days ago)
+        image_699.jpg (modified 3 days ago)
+        image_701.jpg (modified 3 days ago)
       - StudsPics
-        image_10_LegoBrick_0_c87.jpg (modified 2 days ago)
-        image_113_LegoBrick_2_c82.jpg (modified 3.1 days ago)
-        image_119_LegoBrick_1_c77.jpg (modified 2 days ago)
-        image_139_LegoBrick_0_c86.jpg (modified 2 days ago)
-        image_200_LegoBrick_0_c83.jpg (modified 2 days ago)
-        image_223_LegoBrick_1_c81.jpg (modified 3 days ago)
-        image_223_LegoBrick_2_c78.jpg (modified 2 days ago)
-        image_224_LegoBrick_0_c83.jpg (modified 15.1 days ago)
-        image_226_LegoBrick_2_c77.jpg (modified 2 days ago)
-        image_228_LegoBrick_0_c82.jpg (modified 2 days ago)
-        image_23_LegoBrick_0_c81.jpg (modified 2 days ago)
-        image_253_LegoBrick_0_c82.jpg (modified 2 days ago)
-        image_259_LegoBrick_1_c86.jpg (modified 2.3 hours ago)
-        image_28_LegoBrick_0_c88.jpg (modified 3.1 days ago)
-        image_315_LegoBrick_0_c81.jpg (modified 2 days ago)
-        image_319_LegoBrick_0_c78.jpg (modified 2.3 hours ago)
-        image_361_LegoBrick_3_c80.jpg (modified 2 days ago)
-        image_62_LegoBrick_1_c84.jpg (modified 2 days ago)
-        image_7_LegoBrick_1_c87.jpg (modified 2.3 days ago)
-        image_73_LegoBrick_1_c85.jpg (modified 2 days ago)
+        image_10_LegoBrick_0_c87.jpg (modified 3.8 days ago)
+        image_113_LegoBrick_2_c82.jpg (modified 3.8 days ago)
+        image_119_LegoBrick_1_c77.jpg (modified 11.8 days ago)
+        image_139_LegoBrick_0_c86.jpg (modified 11.8 days ago)
+        image_200_LegoBrick_0_c83.jpg (modified 3.8 days ago)
+        image_223_LegoBrick_1_c81.jpg (modified 12.8 days ago)
+        image_223_LegoBrick_2_c78.jpg (modified 11.8 days ago)
+        image_224_LegoBrick_0_c83.jpg (modified 24.9 days ago)
+        image_226_LegoBrick_2_c77.jpg (modified 3 days ago)
+        image_228_LegoBrick_0_c82.jpg (modified 11.8 days ago)
+        image_23_LegoBrick_0_c81.jpg (modified 5.9 days ago)
+        image_253_LegoBrick_0_c82.jpg (modified 11.8 days ago)
+        image_259_LegoBrick_1_c86.jpg (modified 3 days ago)
+        image_28_LegoBrick_0_c88.jpg (modified 12.9 days ago)
+        image_315_LegoBrick_0_c81.jpg (modified 11.8 days ago)
+        image_319_LegoBrick_0_c78.jpg (modified 5.9 days ago)
+        image_361_LegoBrick_3_c80.jpg (modified 3.8 days ago)
+        image_62_LegoBrick_1_c84.jpg (modified 11.8 days ago)
+        image_7_LegoBrick_1_c87.jpg (modified 3.8 days ago)
+        image_73_LegoBrick_1_c85.jpg (modified 3.8 days ago)
     - Test_Labels
       - LabelMe_jsons
-        image_103.json (modified 54.3 days ago)
-        image_1197.json (modified 54.3 days ago)
-        image_1205.json (modified 54.3 days ago)
-        image_1208.json (modified 54.3 days ago)
-        image_136.json (modified 54.3 days ago)
-        image_1543.json (modified 54.3 days ago)
-        image_1552.json (modified 54.3 days ago)
-        image_1556.json (modified 54.3 days ago)
-        image_1729.json (modified 54.3 days ago)
-        image_1734.json (modified 54.3 days ago)
-        image_196.json (modified 54.3 days ago)
-        image_286.json (modified 54.3 days ago)
-        image_504.json (modified 54.3 days ago)
-        image_512.json (modified 54.3 days ago)
-        image_834.json (modified 54.3 days ago)
-        image_841.json (modified 54.3 days ago)
-        image_93.json (modified 54.3 days ago)
+        image_103.json (modified 64.1 days ago)
+        image_1197.json (modified 64.1 days ago)
+        image_1205.json (modified 64.1 days ago)
+        image_1208.json (modified 64.1 days ago)
+        image_136.json (modified 64.1 days ago)
+        image_1543.json (modified 64.1 days ago)
+        image_1552.json (modified 64.1 days ago)
+        image_1556.json (modified 64.1 days ago)
+        image_1729.json (modified 64.1 days ago)
+        image_1734.json (modified 64.1 days ago)
+        image_196.json (modified 64.1 days ago)
+        image_286.json (modified 64.1 days ago)
+        image_504.json (modified 64.1 days ago)
+        image_512.json (modified 64.1 days ago)
+        image_834.json (modified 64.1 days ago)
+        image_841.json (modified 64.1 days ago)
+        image_93.json (modified 64.1 days ago)
       - LabelMe_keypoints
-        image_1_LegoBrick_6_c66.json (modified 135 days ago)
-        image_10_LegoBrick_0_c87.json (modified 135 days ago)
-        image_180_LegoBrick_2_c82.json (modified 134.8 days ago)
-        image_181_LegoBrick_2_c75.json (modified 134.8 days ago)
-        image_641_LegoBrick_0_c85.json (modified 134.3 days ago)
-        image_641_LegoBrick_1_c84.json (modified 134.3 days ago)
-        image_643_LegoBrick_2_c84.json (modified 134.3 days ago)
-        image_87_LegoBrick_4_c72.json (modified 134.8 days ago)
-        image_89_LegoBrick_1_c81.json (modified 134.8 days ago)
+        image_1_LegoBrick_6_c66.json (modified 144.8 days ago)
+        image_10_LegoBrick_0_c87.json (modified 144.8 days ago)
+        image_180_LegoBrick_2_c82.json (modified 144.6 days ago)
+        image_181_LegoBrick_2_c75.json (modified 144.6 days ago)
+        image_641_LegoBrick_0_c85.json (modified 144.1 days ago)
+        image_641_LegoBrick_1_c84.json (modified 144.1 days ago)
+        image_643_LegoBrick_2_c84.json (modified 144.1 days ago)
+        image_87_LegoBrick_4_c72.json (modified 144.6 days ago)
+        image_89_LegoBrick_1_c81.json (modified 144.6 days ago)
   - results
+    - full_inference
+      - image_605
   - scripts
-    Exif_UserComment_renderer.py (modified 3.1 days ago)
+    AlgorithmicClassificationUI.py (modified 3.8 days ago)
+    Exif_UserComment_renderer.py (modified 12.9 days ago)
+    Export_notebook.py (modified 6.8 days ago)
+    ModelFastInference.py (modified 3.9 days ago)
+    ModelFastInferenceUI_LAYOUT.md (modified 3.9 days ago)
     - __pycache__
   - tests
     - __pycache__
+    - training_module
+  - training
+    - __pycache__
   - utils
-    __init__.py (modified 8.8 days ago)
-    batch_utils.py (modified 1.4 hours ago)
-    classification_utils.py (modified 2.2 days ago)
-    config_utils.py (modified 2.1 days ago)
-    data_utils.py (modified 2.3 days ago)
-    detection_utils.py (modified 2.2 days ago)
-    exif_utils.py (modified 8.9 days ago)
-    metadata_utils.py (modified 8.9 days ago)
-    multiclass_training.py (modified 2 days ago)
-    pipeline_utils.py (modified 8.9 days ago)
-    rich_utils.py (modified 4.2 days ago)
-    text_utils.py (modified 14 days ago)
-    visualization_utils.py (modified 2.1 days ago)
+    __init__.py (modified 18.6 days ago)
+    batch_utils.py (modified 9.9 days ago)
+    classification_utils.py (modified 12 days ago)
+    config_utils.py (modified 11.9 days ago)
+    data_utils.py (modified 12.1 days ago)
+    detection_utils.py (modified 12 days ago)
+    exif_utils.py (modified 18.7 days ago)
+    metadata_utils.py (modified 18.7 days ago)
+    multiclass_training.py (modified 11.8 days ago)
+    pipeline_utils.py (modified 18.7 days ago)
+    rich_utils.py (modified 14 days ago)
+    text_utils.py (modified 23.8 days ago)
+    visualization_utils.py (modified 3.8 days ago)
     - __pycache__

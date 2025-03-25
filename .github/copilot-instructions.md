@@ -30,6 +30,7 @@ system: |
   - Computer vision pipelines
   - Command-line tool development
   - Professional code organization and documentation
+  - docs\Storyline_Porject_Storytell.md contains the project story and motivation
 
   When suggesting improvements, focus on:
   - Code organization and clarity
