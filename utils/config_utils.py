@@ -82,25 +82,34 @@ def setup_utils(repo_download=False):
         "studs": r"presentation/Test_images/StudsPics"
     }
     
-    # Find the LEGO_Bricks_ML_Vision directory
+    # Find the LEGO_Bricks_ML_Vision directory, case insensitive
     current_dir = os.getcwd()
-    target_dir = "LEGO_Bricks_ML_Vision"
+    target_dir_variants = ["LEGO_Bricks_ML_Vision", "lego_bricks_ml_vision"]
     
-    if os.path.basename(current_dir) != target_dir:
+    if os.path.basename(current_dir).lower() not in [d.lower() for d in target_dir_variants]:
+        found = False
         # Check current directory
-        potential_path = os.path.join(current_dir, target_dir)
-        if os.path.exists(potential_path):
-            os.chdir(potential_path)
-            logger.info(f"✅ Changed working directory to: {potential_path}")
-        else:
-            # Check one level up
-            parent_dir = os.path.dirname(current_dir)
-            potential_path = os.path.join(parent_dir, target_dir)
+        for variant in target_dir_variants:
+            potential_path = os.path.join(current_dir, variant)
             if os.path.exists(potential_path):
                 os.chdir(potential_path)
                 logger.info(f"✅ Changed working directory to: {potential_path}")
-            else:
-                logger.warning(f"⚠️ Could not find {target_dir} directory")
+                found = True
+                break
+                
+        if not found:
+            # Check one level up
+            parent_dir = os.path.dirname(current_dir)
+            for variant in target_dir_variants:
+                potential_path = os.path.join(parent_dir, variant)
+                if os.path.exists(potential_path):
+                    os.chdir(potential_path)
+                    logger.info(f"✅ Changed working directory to: {potential_path}")
+                    found = True
+                    break
+                    
+        if not found:
+            logger.warning("⚠️ Could not find LEGO Bricks ML Vision directory")
     
     CONFIG_DICT["WORKING_DIR"] = os.getcwd()
     logger.info("📂 Current working directory: %s", os.getcwd())
