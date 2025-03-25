@@ -3,9 +3,6 @@ maxUploadSize = 200
 enableXsrfProtection = false
 headless = true
 
-[browser]
-gatherUsageStats = false
-serverAddress = "0.0.0.0"
 
 [theme]
 primaryColor = "#000000"
