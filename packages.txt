@@ -1,6 +1,0 @@
-libgl1-mesa-glx
-libglib2.0-0
-python3-opencv
-libglu1-mesa
-libgtk2.0-0
-libopencv-dev

@@ -10,6 +10,8 @@ from streamlit_image_select import image_select
 import base64
 
 # Import the CLI interface
+import sys
+sys.path.append(".")
 import lego_cli
 from click.testing import CliRunner
 
@@ -22,7 +24,7 @@ st.set_page_config(
 )
 
 # Sidebar content
-st.sidebar.image("presentation\logo.png")
+st.sidebar.image("presentation/logo.png")
 st.sidebar.title("About")
 st.sidebar.markdown("""
 ### Professional Profile

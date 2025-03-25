@@ -1,11 +1,9 @@
 # Core ML & Data Science
 numpy>=1.22.0
-torch>=2.0.0
+torch>=2.1.0
 torchvision>=0.15.0
-opencv-python>=4.9.0
-opencv-python-headless>=4.9.0  # Use headless for cloud
+opencv-python-headless>=4.9.0  # Required for cloud deployment
 Pillow>=10.0.0
-matplotlib>=3.7.0
 pandas>=2.0.0
 
 # YOLO Implementation
@@ -14,23 +12,19 @@ ultralytics>=8.1.0
 # Image Processing & Metadata
 piexif>=1.1.3
 
-# Data Augmentation
+# Data Augmentation & Image Processing
 albumentations>=2.0.5
 
-# Web App
+# Web App & UI
 streamlit>=1.30.0
 streamlit-image-select>=0.6.0
-
-# GUI
-PyQt5>=5.15.0
 
 # CLI & Utilities
 click>=8.1.0
 rich>=13.0.0
 rich-click>=1.6.0  # Enhanced Click CLI with Rich formatting
-pyyaml>=6.0.0
-ipython>=8.0.0
+pyyaml>=6.0.1
 
-# Testing Dependencies
+# Development Dependencies
 pytest>=7.4.0
 pytest-cov>=4.1.0
