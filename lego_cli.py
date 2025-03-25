@@ -48,6 +48,8 @@ Dependencies:
 Author: Miguel DiLalla
 """
 
+__all__ = ['cli']  # Explicitly expose the CLI entry point
+
 import os
 import sys
 import logging
@@ -95,6 +97,9 @@ import utils.data_utils as data_utils
 from utils.batch_utils import process_batch_inference, display_batch_results
 from utils.visualization_utils import create_batch_visualization
 
+# Ensure logs directory exists before logging setup
+os.makedirs("logs", exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -105,9 +110,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
-# Ensure logs directory exists
-os.makedirs("logs", exist_ok=True)
 
 def validate_output_dir(ctx, param, value):
     """Validate and create output directory if it doesn't exist."""
