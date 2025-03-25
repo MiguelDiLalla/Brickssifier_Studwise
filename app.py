@@ -167,7 +167,8 @@ def process_single_image(image_path, tab_name):
                 "brick_detection.jpg",
                 "stud_detection.jpg",
                 "annotated_image.jpg",
-                "annotated.jpg"
+                "annotated.jpg",
+                "full_analysis.jpg"  # Add pattern for infer command output
             ]
             
             # Search in output directory and immediate subfolder
@@ -179,6 +180,11 @@ def process_single_image(image_path, tab_name):
                     break
                 # Try in image name subfolder
                 path = os.path.join(img_output, img_name, pattern)
+                if os.path.exists(path):
+                    output_path = path
+                    break
+                # Try in double-nested subfolder (for infer command)
+                path = os.path.join(img_output, img_name, img_name, pattern)
                 if os.path.exists(path):
                     output_path = path
                     break
@@ -208,7 +214,9 @@ def process_single_image(image_path, tab_name):
                     # If no JSON in output, check nested locations
                     possible_paths = [
                         os.path.join(img_output, "metadata.json"),
-                        os.path.join(img_output, img_name, "metadata.json")
+                        os.path.join(img_output, img_name, "metadata.json"),
+                        os.path.join(img_output, img_name, img_name, "metadata.json"),
+                        os.path.join(img_output, img_name, img_name, "full_analysis_metadata.json")  # Add infer command metadata pattern
                     ]
                     for json_path in possible_paths:
                         if os.path.exists(json_path):
@@ -441,14 +449,12 @@ def create_tab_content(tab_name):
         with col2:
             st.subheader("Results")
             result_placeholder = st.empty()
-            metadata_placeholder = st.empty()
-            
+
             if st.button("Process Image", key=f"process_{tab_name}", use_container_width=True):
                 if selected_image:
                     with st.spinner('Processing image...'):
-                        # Handle uploaded file vs gallery image
+                        # Get image data from either upload or gallery
                         if isinstance(selected_image, (BytesIO, st.runtime.uploaded_file_manager.UploadedFile)):
-                            # Get bytes from session state for consistency
                             file_key = f'uploaded_{tab_name}'
                             if file_key in st.session_state['uploaded_images']:
                                 result_image, metadata = process_single_image(
@@ -460,87 +466,161 @@ def create_tab_content(tab_name):
                                 return
                         else:
                             result_image, metadata = process_single_image(selected_image, tab_name)
-                            
-                        if result_image and metadata:
-                            result_placeholder.image(result_image, caption="Processed Result", use_container_width=True)
-                            
-                            # Display formatted metadata
-                            if metadata:
-                                # 1. Top level metrics remain as before
-                                metric_cols = st.columns(3)
-                                
-                                # Detection count
-                                if "boxes_coordinates" in metadata:
-                                    detection_count = len(metadata["boxes_coordinates"])
-                                    metric_cols[0].metric("Detections", detection_count)
-                                
-                                # Dimension if available
-                                if "dimension" in metadata:
-                                    metric_cols[1].metric("Dimension", metadata["dimension"])
-                                
-                                # Processing time
-                                if "speed" in metadata:
-                                    speed = metadata["speed"]
-                                    total_time = sum(speed.values())
-                                    metric_cols[2].metric("Processing Time", f"{total_time:.2f}s")
-                                elif "processing_time" in metadata:
-                                    time_str = metadata["processing_time"]
-                                    if isinstance(time_str, str) and time_str.endswith('s'):
-                                        time_str = time_str[:-1]  # Remove 's' suffix
-                                    metric_cols[2].metric("Processing Time", f"{float(time_str):.2f}s")
 
-                                # 2. Detection Details Table
-                                if "boxes_coordinates" in metadata:
-                                    st.subheader("Detection Details")
-                                    detection_data = []
-                                    for idx, box_info in metadata["boxes_coordinates"].items():
-                                        if isinstance(box_info, dict):
-                                            coords = box_info.get("coordinates", [])
-                                            conf = box_info.get("confidence", None)
-                                            class_id = box_info.get("class", None)
-                                            detection_data.append({
-                                                "ID": idx,
-                                                "Coordinates": f"[{', '.join(f'{c:.1f}' for c in coords)}]",
-                                                "Confidence": f"{conf:.2%}" if conf else "N/A",
-                                                "Class": class_id if class_id is not None else "N/A"
-                                            })
-                                    if detection_data:
-                                        st.dataframe(detection_data, use_container_width=True)
+                        if result_image:
+                            # For Dimension Classification tab, just show the composite image
+                            if tab_name == "Dimension Classification":
+                                result_placeholder.image(
+                                    result_image, 
+                                    caption="Full Analysis Result", 
+                                    use_container_width=True
+                                )
 
-                                # 3. Speed Metrics Table
-                                if "speed" in metadata:
-                                    st.subheader("Processing Speed")
-                                    speed_df = [
-                                        {"Stage": "Preprocessing", "Time (s)": f"{metadata['speed'].get('preprocess', 0):.3f}"},
-                                        {"Stage": "Inference", "Time (s)": f"{metadata['speed'].get('inference', 0):.3f}"},
-                                        {"Stage": "Postprocessing", "Time (s)": f"{metadata['speed'].get('postprocess', 0):.3f}"},
-                                        {"Stage": "Total", "Time (s)": f"{sum(metadata['speed'].values()):.3f}"}
-                                    ]
-                                    st.dataframe(speed_df, use_container_width=True)
+                                # Display key metrics from full analysis metadata
+                                if metadata:
+                                    col1, col2, col3 = st.columns(3)
+                                    
+                                    # Column 1: Dimension and confidence
+                                    if "dimension" in metadata:
+                                        col1.metric("Brick Dimension", metadata["dimension"])
+                                    if "confidence" in metadata:
+                                        col1.metric("Confidence", f"{metadata['confidence']:.2%}")
+                                    
+                                    # Column 2: Detection counts
+                                    if "detection_counts" in metadata:
+                                        col2.metric("Bricks Found", metadata["detection_counts"].get("bricks", 0))
+                                        col2.metric("Studs Found", metadata["detection_counts"].get("studs", 0))
+                                    
+                                    # Column 3: Processing time
+                                    if "processing_time" in metadata:
+                                        time_str = metadata["processing_time"]
+                                        if isinstance(time_str, str) and time_str.endswith('s'):
+                                            time_str = time_str[:-1]
+                                        col3.metric("Processing Time", f"{float(time_str):.2f}s")
+                                    
+                                    # Detailed information in expander
+                                    with st.expander("View Full Analysis Details"):
+                                        # Detection information
+                                        if "brick_results" in metadata:
+                                            st.subheader("Brick Detection")
+                                            brick_data = []
+                                            for idx, box in metadata["brick_results"].get("boxes_coordinates", {}).items():
+                                                if isinstance(box, dict):
+                                                    brick_data.append({
+                                                        "ID": idx,
+                                                        "Confidence": f"{box.get('confidence', 0):.2%}",
+                                                        "Location": f"[{', '.join(f'{c:.1f}' for c in box.get('coordinates', []))}]"
+                                                    })
+                                            if brick_data:
+                                                st.dataframe(brick_data, use_container_width=True)
+                                        
+                                        if "studs_results" in metadata:
+                                            st.subheader("Stud Analysis")
+                                            for brick_idx, stud_data in metadata["studs_results"].items():
+                                                st.write(f"Brick {brick_idx}:")
+                                                if isinstance(stud_data, dict):
+                                                    st.write(f"- Pattern: {stud_data.get('pattern', 'Unknown')}")
+                                                    st.write(f"- Studs Count: {stud_data.get('stud_count', 0)}")
+                                        
+                                        # Processing details
+                                        if "speed" in metadata:
+                                            st.subheader("Processing Speed")
+                                            speed_df = [
+                                                {"Stage": k.title(), "Time (s)": f"{v:.3f}"} 
+                                                for k, v in metadata["speed"].items()
+                                            ]
+                                            st.dataframe(speed_df, use_container_width=True)
 
-                                # 4. System Information
-                                sys_info = {}
-                                for key in ["os_full_version_name", "processor", "architecture", "hostname"]:
-                                    if key in metadata:
-                                        sys_info[key.replace("_", " ").title()] = metadata[key]
-                                
-                                if sys_info:
-                                    with st.expander("System Information"):
-                                        for key, value in sys_info.items():
-                                            st.text(f"{key}: {value}")
+                                # Store in virtual outputs with metadata
+                                img_byte_arr = BytesIO()
+                                result_image.save(img_byte_arr, format='JPEG')
+                                st.session_state['virtual_outputs'][tab_name]['images'].append({
+                                    'name': f"result_{time.strftime('%Y%m%d_%H%M%S')}.jpg",
+                                    'data': img_byte_arr.getvalue(),
+                                    'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+                                    'metadata': metadata
+                                })
+                            else:
+                                # Original display logic for detection tabs
+                                result_placeholder.image(result_image, caption="Processed Result", use_container_width=True)
 
-                                # 5. Additional Information
-                                extra_info = {}
-                                for key in ["mode", "TimesScanned", "Repository", "message"]:
-                                    if key in metadata:
-                                        extra_info[key] = metadata[key]
-                                
-                                if extra_info:
-                                    with st.expander("Additional Information"):
-                                        for key, value in extra_info.items():
-                                            # Format key for display
-                                            display_key = " ".join(word.capitalize() for word in key.split("_"))
-                                            st.text(f"{display_key}: {value}")
+                                # Original metadata display logic
+                                if metadata:
+                                    # 1. Top level metrics remain as before
+                                    metric_cols = st.columns(3)
+                                    
+                                    # Detection count
+                                    if "boxes_coordinates" in metadata:
+                                        detection_count = len(metadata["boxes_coordinates"])
+                                        metric_cols[0].metric("Detections", detection_count)
+                                    
+                                    # Dimension if available
+                                    if "dimension" in metadata:
+                                        metric_cols[1].metric("Dimension", metadata["dimension"])
+                                    
+                                    # Processing time
+                                    if "speed" in metadata:
+                                        speed = metadata["speed"]
+                                        total_time = sum(speed.values())
+                                        metric_cols[2].metric("Processing Time", f"{total_time:.2f}s")
+                                    elif "processing_time" in metadata:
+                                        time_str = metadata["processing_time"]
+                                        if isinstance(time_str, str) and time_str.endswith('s'):
+                                            time_str = time_str[:-1]  # Remove 's' suffix
+                                        metric_cols[2].metric("Processing Time", f"{float(time_str):.2f}s")
+
+                                    # 2. Detection Details Table
+                                    if "boxes_coordinates" in metadata:
+                                        st.subheader("Detection Details")
+                                        detection_data = []
+                                        for idx, box_info in metadata["boxes_coordinates"].items():
+                                            if isinstance(box_info, dict):
+                                                coords = box_info.get("coordinates", [])
+                                                conf = box_info.get("confidence", None)
+                                                class_id = box_info.get("class", None)
+                                                detection_data.append({
+                                                    "ID": idx,
+                                                    "Coordinates": f"[{', '.join(f'{c:.1f}' for c in coords)}]",
+                                                    "Confidence": f"{conf:.2%}" if conf else "N/A",
+                                                    "Class": class_id if class_id is not None else "N/A"
+                                                })
+                                        if detection_data:
+                                            st.dataframe(detection_data, use_container_width=True)
+
+                                    # 3. Speed Metrics Table
+                                    if "speed" in metadata:
+                                        st.subheader("Processing Speed")
+                                        speed_df = [
+                                            {"Stage": "Preprocessing", "Time (s)": f"{metadata['speed'].get('preprocess', 0):.3f}"},
+                                            {"Stage": "Inference", "Time (s)": f"{metadata['speed'].get('inference', 0):.3f}"},
+                                            {"Stage": "Postprocessing", "Time (s)": f"{metadata['speed'].get('postprocess', 0):.3f}"},
+                                            {"Stage": "Total", "Time (s)": f"{sum(metadata['speed'].values()):.3f}"}
+                                        ]
+                                        st.dataframe(speed_df, use_container_width=True)
+
+                                    # 4. System Information
+                                    sys_info = {}
+                                    for key in ["os_full_version_name", "processor", "architecture", "hostname"]:
+                                        if key in metadata:
+                                            sys_info[key.replace("_", " ").title()] = metadata[key]
+                                    
+                                    if sys_info:
+                                        with st.expander("System Information"):
+                                            for key, value in sys_info.items():
+                                                st.text(f"{key}: {value}")
+
+                                    # 5. Additional Information
+                                    extra_info = {}
+                                    for key in ["mode", "TimesScanned", "Repository", "message"]:
+                                        if key in metadata:
+                                            extra_info[key] = metadata[key]
+                                    
+                                    if extra_info:
+                                        with st.expander("Additional Information"):
+                                            for key, value in extra_info.items():
+                                                # Format key for display
+                                                display_key = " ".join(word.capitalize() for word in key.split("_"))
+                                                st.text(f"{display_key}: {value}")
                 else:
                     st.warning("Please upload an image or select a test image first.")
 
