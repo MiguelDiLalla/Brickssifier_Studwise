@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # Sidebar content
-st.logo("presentation/logo.png", size="large")
+st.sidebar.image("presentation\logo.png")
 st.sidebar.title("About")
 st.sidebar.markdown("""
 ### Professional Profile
@@ -31,11 +31,11 @@ st.sidebar.markdown("""
 - 🎯 Focus on Deep Learning Applications
 
 ### Connect with Me
-[![GitHub](https://img.shields.io/badge/GitHub-Profile-blue?style=for-the-badge&logo=github)](YOUR_GITHUB_URL)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Profile-blue?style=for-the-badge&logo=linkedin)](YOUR_LINKEDIN_URL)
+[![GitHub](https://img.shields.io/badge/GitHub-Profile-blue?style=for-the-badge&logo=github)](https://github.com/MiguelDiLalla)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Profile-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/MiguelDiLalla)
 
 ### Project Repository
-[![View on GitHub](https://img.shields.io/badge/GitHub-View_Repository-blue?style=for-the-badge&logo=github)](YOUR_REPO_URL)
+[![View on GitHub](https://img.shields.io/badge/GitHub-View_Repository-blue?style=for-the-badge&logo=github)](https://github.com/MiguelDiLalla/LEGO_Bricks_ML_Vision)
 """)
 
 st.sidebar.markdown("---")
@@ -620,7 +620,7 @@ def main():
     
     # Footer
     st.markdown("---")
-    st.markdown("Made with ❤️ using Streamlit • [Source Code](YOUR_REPO_URL)")
+    st.markdown("Made with ❤️ using Streamlit • [Source Code](https://github.com/MiguelDiLalla/LEGO_Bricks_ML_Vision)")
 
 if __name__ == "__main__":
     main()
