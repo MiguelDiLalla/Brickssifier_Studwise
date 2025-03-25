@@ -87,7 +87,7 @@ except ImportError:
 
 # Import project modules - Updated to use new modular structure
 from utils.config_utils import setup_utils, config
-from utils.detection_utils import detect_bricks, detect_studs
+from utils.detection_utils import detect_bricks, detect_studs, detect_multiclass
 from utils.pipeline_utils import run_full_algorithm, batch_process
 from utils.exif_utils import read_exif, write_exif, clean_exif_metadata
 from utils.visualization_utils import display_conversion_summary
@@ -149,6 +149,12 @@ def display_rich_help():
             ("detect-studs", "Detect studs on LEGO bricks", [
                 "--image PATH", "--output PATH", "--conf FLOAT",
                 "--save-annotated/--no-save-annotated",
+                "--clean-exif/--no-clean-exif"
+            ]),
+            ("detect-multiclass", "Detect and classify LEGO bricks in one step", [
+                "--image PATH", "--output PATH", "--conf FLOAT",
+                "--save-annotated/--no-save-annotated",
+                "--save-json/--no-save-json",
                 "--clean-exif/--no-clean-exif"
             ]),
             ("infer", "Run full detection pipeline", [
@@ -465,6 +471,148 @@ def detect_studs_cmd(image, output, conf, save_annotated, clean_exif):
         last_result = result  # Update the last processed result
 
     # Return a standardized output dict for the last processed image
+    if last_result:
+        return {
+            "annotated_image": last_result.get("annotated_image"),
+            "metadata": last_result.get("metadata", {})
+        }
+
+@cli.command('detect-multiclass')
+@click.option('--image', required=True, type=click.Path(exists=True),
+              help='Path to input image or directory of images.')
+@click.option('--output', type=click.Path(), callback=validate_output_dir,
+              help='Directory to save output. Will be created if it does not exist.')
+@click.option('--conf', type=float, default=0.25,
+              help='Confidence threshold for detections (0-1).')
+@click.option('--save-annotated/--no-save-annotated', default=True,
+              help='Save annotated images with detection visualization.')
+@click.option('--save-json/--no-save-json', default=False,
+              help='Save detection results as JSON files.')
+@click.option('--clean-exif/--no-clean-exif', default=False,
+              help='Clean EXIF metadata before processing.')
+def detect_multiclass_cmd(image, output, conf, save_annotated, save_json, clean_exif):
+    """Detect and classify LEGO bricks using the multiclass model.
+    
+    This command runs the multiclass detection model, which directly classifies
+    brick dimensions during detection. It combines brick detection and dimension
+    classification into a single step.
+
+    Returns a dict with:
+        - annotated_image: Image with detection visualization and dimension labels
+        - metadata: Complete metadata dictionary including dimension classifications
+    """
+    if RICH_AVAILABLE:
+        console.print(Panel.fit("[bold blue]LEGO Multiclass Detection[/bold blue]"))
+    
+    # Ensure output directory has a default value
+    if not output:
+        output = os.path.join(os.getcwd(), "results", "multiclass_detection")
+        os.makedirs(output, exist_ok=True)
+        logger.info(f"Using default output directory: {output}")
+    
+    # Handle single image or directory input
+    images_to_process = []
+    if os.path.isdir(image):
+        images_to_process = glob.glob(os.path.join(image, "*.jpg")) + \
+                           glob.glob(os.path.join(image, "*.png"))
+        logger.info(f"Found {len(images_to_process)} images in directory {image}")
+    else:
+        images_to_process = [image]
+        
+    if not images_to_process:
+        logger.error("No images found to process.")
+        sys.exit(1)
+
+    last_result = None  # Store the last processed result
+        
+    for img_path in images_to_process:
+        logger.info(f"Processing image: {img_path}")
+        
+        # Clean EXIF if requested
+        if clean_exif:
+            logger.info(f"Cleaning EXIF metadata for {img_path}")
+            clean_exif_metadata(img_path)
+        
+        # Create image-specific output subfolder
+        img_name = os.path.basename(img_path)
+        img_output = os.path.join(output, os.path.splitext(img_name)[0])
+        os.makedirs(img_output, exist_ok=True)
+        
+        # Run detection
+        if RICH_AVAILABLE:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(),
+                TextColumn("[bold green]{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+                console=console
+            ) as progress:
+                task = progress.add_task(f"[green]Running multiclass detection on {img_name}...", total=100)
+                
+                # Run detection with progress updates
+                progress.update(task, advance=10)
+                result = detect_multiclass(
+                    img_path,
+                    conf=conf,
+                    save_json=save_json,
+                    save_annotated=save_annotated,
+                    output_folder=img_output
+                )
+                progress.update(task, advance=90)
+                
+        else:
+            # Run detection without progress display
+            result = detect_multiclass(
+                img_path,
+                conf=conf,
+                save_json=save_json,
+                save_annotated=save_annotated,
+                output_folder=img_output
+            )
+        
+        # Check detection results
+        if result is None:
+            logger.error(f"Detection failed for {img_path}")
+            continue
+            
+        boxes = result.get("boxes", [])
+        if len(boxes) == 0:
+            logger.warning(f"No bricks detected in {img_path}")
+        else:
+            logger.info(f"Detected {len(boxes)} bricks in {img_path}")
+            
+        # Display dimension classification results
+        if RICH_AVAILABLE and result.get("metadata", {}).get("classes", []):
+            table = Table(title=f"Detection Results for {img_name}")
+            table.add_column("Brick", style="cyan")
+            table.add_column("Dimension", style="green")
+            table.add_column("Confidence", style="yellow")
+            
+            for i, (cls, conf) in enumerate(zip(
+                result["metadata"]["classes"],
+                result["metadata"]["confidences"]
+            )):
+                table.add_row(
+                    f"Brick {i+1}",
+                    str(cls),
+                    f"{conf:.2f}"
+                )
+            console.print(table)
+            
+        # Save annotated image if requested
+        if save_annotated:
+            annotated_path = os.path.join(img_output, "multiclass_detection.jpg")
+            logger.info(f"Saved annotated image to {annotated_path}")
+            
+        if RICH_AVAILABLE:
+            console.print(f"[green]Results saved to:[/green] {img_output}")
+        else:
+            click.echo(f"Results saved to: {img_output}")
+
+        last_result = result  # Update the last processed result
+
+    # Return the standardized output dict
     if last_result:
         return {
             "annotated_image": last_result.get("annotated_image"),

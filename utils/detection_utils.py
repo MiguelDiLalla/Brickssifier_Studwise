@@ -369,6 +369,202 @@ def detect_studs(image_input, model=None, conf=0.25, save_annotated=False, outpu
         "status": "success"
     }
 
+def detect_multiclass(image_input, model=None, conf=0.25, save_json=False, save_annotated=False, output_folder="", use_progress=True, force_rerun=False):
+    """
+    Performs multiclass detection using the provided YOLO model with rich progress display.
+    
+    Args:
+        image_input (Union[str, np.ndarray]): Either image path (str) or numpy array
+        model (YOLO, optional): YOLO model instance (uses default from config if None)
+        conf (float): Confidence threshold for detections (0.0-1.0)
+        save_json (bool): If True, saves detection metadata as JSON
+        save_annotated (bool): If True, saves annotated image
+        output_folder (str): Directory to save outputs to
+        use_progress (bool): Whether to use progress display
+        force_rerun (bool): If True, forces re-running detection even if cached results exist
+        
+    Returns:
+        dict: Dictionary containing:
+            - orig_image: Original image
+            - annotated_image: Image with annotations 
+            - cropped_detections: List of cropped regions
+            - metadata: Complete metadata dictionary
+            - boxes: Detected bounding boxes
+    """
+    # Define results at the beginning to ensure it exists
+    results = None
+    
+    # Check for cached detection if image_input is a file path and not forcing rerun
+    if isinstance(image_input, str) and not force_rerun:
+        cached_results = read_detection(image_input)
+        if cached_results and cached_results.get("status") == "success":
+            if "mode" in cached_results.get("metadata", {}) and cached_results["metadata"]["mode"] == "multiclass":
+                logger.info("📋 Using cached multiclass detection results from EXIF metadata.")
+                
+                if output_folder and save_annotated:
+                    annotated_image = cached_results.get("annotated_image")
+                    annotated_path = os.path.join(output_folder, "cached_multiclass_detection.jpg")
+                    os.makedirs(output_folder, exist_ok=True)
+                    cv2.imwrite(annotated_path, annotated_image)
+                    logger.info("💾 Cached annotated image saved at: %s", annotated_path)
+                    
+                return cached_results
+
+    with console.status("[bold green]Loading image and model...") if RICH_AVAILABLE else nullcontext() as status:
+        # Load model if not provided
+      
+        if model is None:
+            model = config.get("LOADED_MODELS", {}).get("multiclass")
+            if model is None:
+                logger.error("❌ No multiclass model loaded.")
+                return {
+                    "status": "error",
+                    "message": "No multiclass model loaded",
+                    "orig_image": image,
+                    "annotated_image": image.copy() if image is not None else None,
+                    "cropped_detections": [],
+                    "metadata": {},
+                    "boxes": np.array([])
+                }
+        
+        # Load image
+        if isinstance(image_input, str):
+            image = cv2.imread(image_input)
+            if image is None:
+                logger.error("❌ Failed to load image from path: %s", image_input)
+                return None
+        else:
+            image = image_input
+            
+        if not output_folder:
+            logger.warning("⚠️ No output folder provided. Results will not be saved.")
+        else:
+            os.makedirs(output_folder, exist_ok=True)
+        
+        if RICH_AVAILABLE and status:
+            status.update("[bold green]Running detection...")
+
+    if use_progress and RICH_AVAILABLE:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TextColumn("[bold green]{task.completed}/{task.total}"),
+            TimeElapsedColumn()
+        ) as progress:
+            detection_task = progress.add_task("[green]Detecting bricks...", total=100)
+            
+            # Run detection
+            results = model.predict(source=image, conf=conf)
+            progress.update(detection_task, advance=50)
+            
+            metadata = extract_metadata_from_yolo_result(results, image_input)
+            metadata["mode"] = "multiclass"
+
+            # Extract class names dictionary from model
+            try:
+                class_names = model.names if hasattr(model, 'names') else {}
+                logger.info("📋 Found %d class names in model", len(class_names))
+            except Exception as e:
+                logger.error("❌ Failed to extract class names from model: %s", e)
+                class_names = {}
+
+            # Enrich metadata by replacing class IDs with class names
+            if "boxes_coordinates" in metadata and class_names:
+                try:
+                    replaced_count = 0
+                    # Iterate through numeric string keys in boxes_coordinates
+                    for _, box_info in metadata["boxes_coordinates"].items():
+                        if "class" in box_info and box_info["class"] in class_names:
+                            box_info["class"] = class_names[box_info["class"]]
+                            replaced_count += 1
+                    logger.info("✅ Replaced %d class IDs with class names", replaced_count)
+                except Exception as e:
+                    logger.error("❌ Error replacing class names in metadata: %s", e)
+            else:
+                logger.warning("⚠️ No boxes in metadata or no class names available")
+
+
+            boxes_np = results[0].boxes.xyxy.cpu().numpy() if results and len(results) > 0 and results[0].boxes.xyxy is not None else np.array([])
+            annotated_image = results[0].plot(labels=True) if boxes_np.size > 0 else image.copy()
+            
+            cropped_detections = []
+            for box in boxes_np:
+                x1, y1, x2, y2 = map(int, box)
+                crop = image[y1:y2, x1:x2]
+                cropped_detections.append(crop)
+            
+            if output_folder:
+                if save_annotated:
+                    composite_path = os.path.join(output_folder, "multiclass_detection.jpg")
+                    cv2.imwrite(composite_path, annotated_image)
+                    metadata["annotated_image_path"] = composite_path
+                    logger.info("💾 Saved annotated image to: %s", composite_path)
+                    
+                if save_json:
+                    json_path = os.path.join(output_folder, "multiclass_metadata.json")
+                    with open(json_path, 'w') as f:
+                        json.dump(metadata, f, indent=4)
+                    metadata["json_results_path"] = json_path
+                    logger.info("💾 Saved metadata to: %s", json_path)
+                    
+            progress.update(detection_task, completed=100)
+    else:
+        # Run detection without progress display
+        results = model.predict(source=image, conf=conf)
+        metadata = extract_metadata_from_yolo_result(results, image_input)
+        metadata["mode"] = "multiclass"
+        boxes_np = results[0].boxes.xyxy.cpu().numpy() if results and len(results) > 0 and results[0].boxes.xyxy is not None else np.array([])
+        annotated_image = results[0].plot(labels=True) if boxes_np.size > 0 else image.copy()
+        
+        cropped_detections = []
+        for box in boxes_np:
+            x1, y1, x2, y2 = map(int, box)
+            crop = image[y1:y2, x1:x2]
+            cropped_detections.append(crop)
+        
+        if output_folder:
+            if save_annotated:
+                composite_path = os.path.join(output_folder, "multiclass_detection.jpg")
+                cv2.imwrite(composite_path, annotated_image)
+                metadata["annotated_image_path"] = composite_path
+                logger.info("💾 Saved annotated image to: %s", composite_path)
+                
+            if save_json:
+                json_path = os.path.join(output_folder, "multiclass_metadata.json")
+                with open(json_path, 'w') as f:
+                    json.dump(metadata, f, indent=4)
+                metadata["json_results_path"] = json_path
+                logger.info("💾 Saved metadata to: %s", json_path)
+
+    if results and len(results) > 0 and RICH_AVAILABLE:
+        display_results_table("Multiclass Detection Results", [
+            ("Objects detected", str(len(boxes_np))),
+            ("Confidence threshold", f"{conf:.2f}"),
+            ("Processing time", f"{metadata['speed']['inference']:.3f}s")
+        ])
+    else:
+        logger.info("📊 Detected %d objects with confidence threshold %.2f in %.3fs", 
+                   len(boxes_np), conf, metadata['speed']['inference'])
+    
+    try:
+        if isinstance(image_input, str):
+            write_exif(image_input, metadata)
+        
+        if save_annotated and metadata.get("annotated_image_path"):
+            write_exif(metadata["annotated_image_path"], metadata)
+    except Exception as e:
+        logger.error("❌ Failed to write EXIF metadata: %s", e)
+        
+    return {
+        "orig_image": image,
+        "annotated_image": annotated_image,
+        "cropped_detections": cropped_detections,
+        "metadata": metadata,
+        "boxes": boxes_np,
+        "status": "success"
+    }
+
 # Context manager for non-rich environments
 class nullcontext:
     def __enter__(self):

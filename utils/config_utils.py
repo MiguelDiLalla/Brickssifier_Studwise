@@ -67,7 +67,8 @@ def setup_utils(repo_download=False):
 
     CONFIG_DICT["MODELS_PATHS"] = {
         "bricks": get_latest_model("Brick"),
-        "studs": get_latest_model("Stud")
+        "studs": get_latest_model("Stud"),
+        "multiclass": get_latest_model("Multi")
     }
 
     # Log found model paths

@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # Sidebar content
-st.sidebar.image("presentation/logo.png", use_container_width=True)
+st.logo("presentation/logo.png", size="large")
 st.sidebar.title("About")
 st.sidebar.markdown("""
 ### Professional Profile
@@ -93,7 +93,8 @@ if 'virtual_outputs' not in st.session_state:
     st.session_state['virtual_outputs'] = {
         'Brick Detection': {'images': [], 'metadata': []},
         'Stud Detection': {'images': [], 'metadata': []},
-        'Dimension Classification': {'images': [], 'metadata': []}
+        'Dimension Classification': {'images': [], 'metadata': []},
+        'Multiclass DEMO': {'images': [], 'metadata': []}  # Add new tab storage
     }
 
 # Initialize uploaded images in session state
@@ -142,6 +143,8 @@ def process_single_image(image_path, tab_name):
                 cli_command = ["detect-studs"]
             elif tab_name.lower() == "dimension classification":
                 cli_command = ["infer"]
+            elif tab_name.lower() == "multiclass demo":
+                cli_command = ["detect-multiclass"]
             
             # Add common parameters
             cli_command.extend([
@@ -149,6 +152,10 @@ def process_single_image(image_path, tab_name):
                 "--save-annotated",
                 "--output", img_output
             ])
+            
+            # Add --save-json for multiclass detection
+            if tab_name.lower() == "multiclass demo":
+                cli_command.append("--save-json")
             
             # Run CLI command
             start_time = time.time()
@@ -168,7 +175,8 @@ def process_single_image(image_path, tab_name):
                 "stud_detection.jpg",
                 "annotated_image.jpg",
                 "annotated.jpg",
-                "full_analysis.jpg"  # Add pattern for infer command output
+                "full_analysis.jpg",
+                "multiclass_detection.jpg"  # Add multiclass output pattern
             ]
             
             # Search in output directory and immediate subfolder
@@ -302,15 +310,6 @@ def create_tab_content(tab_name):
             clean_test_images_metadata(tab_type)
             st.session_state['current_tab'] = tab_name
 
-        # Initialize session state for this tab if not exists
-        if f'selection_method_{tab_name}' not in st.session_state:
-            st.session_state[f'selection_method_{tab_name}'] = None
-
-        # Reset selection method when changing tabs
-        if st.session_state.get(f'last_tab_{tab_name}') != tab_name:
-            st.session_state[f'selection_method_{tab_name}'] = None
-            st.session_state[f'last_tab_{tab_name}'] = tab_name
-
         col1, col2 = st.columns([1, 1])
         
         with col1:
@@ -322,23 +321,28 @@ def create_tab_content(tab_name):
                 type=['jpg', 'jpeg', 'png'], 
                 key=f"uploader_{tab_name}"
             )
+
+            # Reset gallery selection when upload state changes
+            file_key = f'uploaded_{tab_name}'
+            if uploaded_file is not None and file_key not in st.session_state['uploaded_images']:
+                # New upload - clear gallery selection
+                for key in list(st.session_state.keys()):
+                    if key.startswith(f'gallery_{tab_name}'):
+                        del st.session_state[key]
+            elif uploaded_file is None and file_key in st.session_state['uploaded_images']:
+                # Upload removed - clear upload state, selection, and force gallery refresh
+                del st.session_state['uploaded_images'][file_key]
+                # Clear all gallery-related state to force complete re-render
+                for key in list(st.session_state.keys()):
+                    if key.startswith(f'gallery_{tab_name}'):
+                        del st.session_state[key]
+                # Force streamlit to re-render this component
+                st.rerun()
             
             # Handle file upload
             if uploaded_file is not None:
-                # Store uploaded file in memory and clear any gallery selection
-                file_key = f'uploaded_{tab_name}'
-                # Force gallery refresh with unique timestamp and filename
-                refresh_key = f"{uploaded_file.name}_{time.time()}"
-                st.session_state[f'gallery_refresh_key_{tab_name}'] = refresh_key
-                
-                # Clean up any stale gallery state to force fresh render
-                for key in list(st.session_state.keys()):
-                    if key.startswith(f'gallery_{tab_name}_'):
-                        del st.session_state[key]
-                
-                if file_key not in st.session_state['uploaded_images'] or \
-                   uploaded_file != st.session_state.get(f'last_upload_{tab_name}'):
-                    # Convert uploaded file to bytes for consistent storage
+                # Convert uploaded file to bytes once
+                if file_key not in st.session_state['uploaded_images']:
                     bytes_data = uploaded_file.getvalue()
                     img = Image.open(BytesIO(bytes_data))
                     # Resize if too large while maintaining aspect ratio
@@ -350,23 +354,6 @@ def create_tab_content(tab_name):
                     img_byte_arr = BytesIO()
                     img.save(img_byte_arr, format='JPEG', quality=95)
                     st.session_state['uploaded_images'][file_key] = img_byte_arr.getvalue()
-                    st.session_state[f'last_upload_{tab_name}'] = uploaded_file
-                    st.session_state[f'selection_method_{tab_name}'] = 'upload'
-                    # Reset gallery selection
-                    st.session_state[f'gallery_{tab_name}_True'] = None
-            elif st.session_state.get(f'selection_method_{tab_name}') == 'upload':
-                # File was removed
-                file_key = f'uploaded_{tab_name}'
-                if file_key in st.session_state['uploaded_images']:
-                    del st.session_state['uploaded_images'][file_key]
-                # Clean up all related state
-                if f'gallery_refresh_key_{tab_name}' in st.session_state:
-                    del st.session_state[f'gallery_refresh_key_{tab_name}']
-                if f'last_upload_{tab_name}' in st.session_state:
-                    del st.session_state[f'last_upload_{tab_name}']
-                st.session_state[f'selection_method_{tab_name}'] = None
-                # Force gallery refresh on file removal
-                st.session_state[f'gallery_refresh_key_{tab_name}'] = f"removed_{time.time()}"
             
             # Determine which type of images to load
             if tab_name.lower() == "stud detection":
@@ -383,69 +370,58 @@ def create_tab_content(tab_name):
             if not test_images and not uploaded_file:
                 st.warning(f"No test images found for {tab_name}")
             else:
-                # Reset image_select key when upload state changes to force re-render
-                gallery_key = f"gallery_{tab_name}_{uploaded_file is not None}"
+                # Prepare gallery images
+                gallery_images = []
+                gallery_captions = []
                 
-                # Include uploaded file in gallery if it exists
-                display_images = test_images.copy() if test_images else []
-                display_captions = captions.copy() if captions else []
+                # Add uploaded image if present
+                if uploaded_file is not None and file_key in st.session_state['uploaded_images']:
+                    uploaded_bytes = st.session_state['uploaded_images'][file_key]
+                    gallery_images.append(Image.open(BytesIO(uploaded_bytes)))
+                    gallery_captions.append("Uploaded Image")
                 
-                if uploaded_file is not None:
-                    # Convert UploadedFile to PIL Image for gallery display
-                    file_key = f'uploaded_{tab_name}'
-                    if file_key in st.session_state['uploaded_images']:
-                        # Create PIL Image from bytes
-                        bytes_data = st.session_state['uploaded_images'][file_key]
-                        uploaded_img = Image.open(BytesIO(bytes_data))
-                        display_images.insert(0, uploaded_img)
-                        display_captions.insert(0, "Uploaded Image")
-                
-                # Show gallery with combined images
-                if display_images:
-                    # Use the refresh key in the gallery key to force update
-                    refresh_key = st.session_state.get(f'gallery_refresh_key_{tab_name}', '')
-                    gallery_key = f"gallery_{tab_name}_{refresh_key}"
+                # Add test images
+                for img_path in test_images:
+                    try:
+                        pil_img = Image.open(img_path)
+                        if pil_img.width > 800 or pil_img.height > 800:
+                            ratio = min(800/pil_img.width, 800/pil_img.height)
+                            new_size = (int(pil_img.width * ratio), int(pil_img.height * ratio))
+                            pil_img = pil_img.resize(new_size, Image.Resampling.LANCZOS)
+                        gallery_images.append(pil_img)
+                    except Exception as e:
+                        st.warning(f"Could not load image {img_path}: {str(e)}")
+                        continue
+                gallery_captions.extend(captions)
 
-                    # Convert paths to PIL Images for display
-                    gallery_images = []
-                    for img in display_images:
-                        if isinstance(img, str):  # It's a path
-                            try:
-                                pil_img = Image.open(img)
-                                # Resize if needed
-                                if pil_img.width > 800 or pil_img.height > 800:
-                                    ratio = min(800/pil_img.width, 800/pil_img.height)
-                                    new_size = (int(pil_img.width * ratio), int(pil_img.height * ratio))
-                                    pil_img = pil_img.resize(new_size, Image.Resampling.LANCZOS)
-                                gallery_images.append(pil_img)
-                            except Exception as e:
-                                st.warning(f"Could not load image {img}: {str(e)}")
-                                continue
-                        else:  # Already a PIL Image
-                            gallery_images.append(img)
-
+                # Show gallery with all images
+                if gallery_images:
+                    # Create a unique key that changes when upload state changes
+                    gallery_key = f"gallery_{tab_name}"
+                    if uploaded_file is not None:
+                        gallery_key += "_with_upload"
+                    
                     selected_idx = image_select(
                         "Select an image from the gallery",
                         images=gallery_images,
-                        captions=display_captions,
+                        captions=gallery_captions,
                         use_container_width=True,
                         return_value="index",
                         key=gallery_key
                     )
                     
-                    # Handle gallery selection
+                    # Handle selection
                     if selected_idx is not None:
-                        if selected_idx == 0 and uploaded_file is not None:
-                            selected_image = uploaded_file
+                        if uploaded_file is not None and selected_idx == 0:
+                            # Selected uploaded image
+                            selected_image = BytesIO(st.session_state['uploaded_images'][file_key])
                             caption = "Uploaded Image"
-                            st.session_state[f'selection_method_{tab_name}'] = 'upload'
                         else:
-                            # Adjust index if we have an uploaded image
+                            # Selected test image
                             img_idx = selected_idx - 1 if uploaded_file is not None else selected_idx
-                            selected_image = test_images[img_idx]  # Use original path for CLI
+                            selected_image = test_images[img_idx]
                             caption = captions[img_idx]
-                            st.session_state[f'selection_method_{tab_name}'] = 'gallery'
-        
+
         with col2:
             st.subheader("Results")
             result_placeholder = st.empty()
@@ -623,7 +599,12 @@ def create_tab_content(tab_name):
 # Main app
 def main():
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["Brick Detection", "Stud Detection", "Dimension Classification"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Brick Detection", 
+        "Stud Detection", 
+        "Dimension Classification",
+        "Multiclass DEMO"
+    ])
     
     with tab1:
         create_tab_content("Brick Detection")
@@ -633,6 +614,9 @@ def main():
     
     with tab3:
         create_tab_content("Dimension Classification")
+
+    with tab4:
+        create_tab_content("Multiclass DEMO")  # Add new tab
     
     # Footer
     st.markdown("---")
