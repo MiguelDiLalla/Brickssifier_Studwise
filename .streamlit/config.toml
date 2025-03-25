@@ -13,3 +13,7 @@ font = "monospace"
 
 [logger]
 level = "info"
+
+[server]
+fileWatcherType = "poll"
+
