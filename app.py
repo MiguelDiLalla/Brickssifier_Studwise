@@ -476,61 +476,6 @@ def create_tab_content(tab_name):
                                     use_container_width=True
                                 )
 
-                                # Display key metrics from full analysis metadata
-                                if metadata:
-                                    col1, col2, col3 = st.columns(3)
-                                    
-                                    # Column 1: Dimension and confidence
-                                    if "dimension" in metadata:
-                                        col1.metric("Brick Dimension", metadata["dimension"])
-                                    if "confidence" in metadata:
-                                        col1.metric("Confidence", f"{metadata['confidence']:.2%}")
-                                    
-                                    # Column 2: Detection counts
-                                    if "detection_counts" in metadata:
-                                        col2.metric("Bricks Found", metadata["detection_counts"].get("bricks", 0))
-                                        col2.metric("Studs Found", metadata["detection_counts"].get("studs", 0))
-                                    
-                                    # Column 3: Processing time
-                                    if "processing_time" in metadata:
-                                        time_str = metadata["processing_time"]
-                                        if isinstance(time_str, str) and time_str.endswith('s'):
-                                            time_str = time_str[:-1]
-                                        col3.metric("Processing Time", f"{float(time_str):.2f}s")
-                                    
-                                    # Detailed information in expander
-                                    with st.expander("View Full Analysis Details"):
-                                        # Detection information
-                                        if "brick_results" in metadata:
-                                            st.subheader("Brick Detection")
-                                            brick_data = []
-                                            for idx, box in metadata["brick_results"].get("boxes_coordinates", {}).items():
-                                                if isinstance(box, dict):
-                                                    brick_data.append({
-                                                        "ID": idx,
-                                                        "Confidence": f"{box.get('confidence', 0):.2%}",
-                                                        "Location": f"[{', '.join(f'{c:.1f}' for c in box.get('coordinates', []))}]"
-                                                    })
-                                            if brick_data:
-                                                st.dataframe(brick_data, use_container_width=True)
-                                        
-                                        if "studs_results" in metadata:
-                                            st.subheader("Stud Analysis")
-                                            for brick_idx, stud_data in metadata["studs_results"].items():
-                                                st.write(f"Brick {brick_idx}:")
-                                                if isinstance(stud_data, dict):
-                                                    st.write(f"- Pattern: {stud_data.get('pattern', 'Unknown')}")
-                                                    st.write(f"- Studs Count: {stud_data.get('stud_count', 0)}")
-                                        
-                                        # Processing details
-                                        if "speed" in metadata:
-                                            st.subheader("Processing Speed")
-                                            speed_df = [
-                                                {"Stage": k.title(), "Time (s)": f"{v:.3f}"} 
-                                                for k, v in metadata["speed"].items()
-                                            ]
-                                            st.dataframe(speed_df, use_container_width=True)
-
                                 # Store in virtual outputs with metadata
                                 img_byte_arr = BytesIO()
                                 result_image.save(img_byte_arr, format='JPEG')
@@ -541,7 +486,6 @@ def create_tab_content(tab_name):
                                     'metadata': metadata
                                 })
                             else:
-                                # Original display logic for detection tabs
                                 result_placeholder.image(result_image, caption="Processed Result", use_container_width=True)
 
                                 # Original metadata display logic
