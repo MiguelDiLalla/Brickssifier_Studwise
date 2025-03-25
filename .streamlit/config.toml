@@ -1,0 +1,18 @@
+[server]
+maxUploadSize = 200
+enableXsrfProtection = false
+headless = true
+
+[browser]
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+
+[theme]
+primaryColor = "#000000"
+backgroundColor = "#ffcf00"
+secondaryBackgroundColor = "#ff0000"
+textColor = "#222c50"
+font = "monospace"
+
+[logger]
+level = "info"
