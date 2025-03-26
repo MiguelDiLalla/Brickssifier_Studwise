@@ -20,6 +20,7 @@ import tkinter as tk
 from tkinter import scrolledtext, messagebox
 import tkinter.font as tkFont
 from PIL import Image, ImageTk
+import subprocess
 
 # Add the parent directory to the path so we can import the utils module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,14 +34,15 @@ THEME = {
     'text': '#FFFFFF',
     'accent': '#007ACC',
     'border': '#3E3E42',
-    'padding': 12
+    'padding': 12,
+    'button_disabled': '#4D4D4D'
 }
 
 class ExifUserCommentRenderer:
     def __init__(self, root):
         self.root = root
         self.root.title("EXIF Viewer")
-        self.root.geometry("900x700")
+        self.root.geometry("1200x700")  # Increased width to accommodate side-by-side layout
         self.root.configure(bg=THEME['bg_dark'])
         
         # Configure grid weights
@@ -54,36 +56,56 @@ class ExifUserCommentRenderer:
         
     def setup_ui(self):
         # Header with minimal design
+        header_frame = tk.Frame(self.root, bg=THEME['bg_dark'])
+        header_frame.grid(row=0, column=0, sticky='ew', pady=(THEME['padding'], 0))
+        header_frame.grid_columnconfigure(1, weight=1)  # Make the space between title and button flexible
+        
         title_font = tkFont.Font(family="Segoe UI", size=14, weight="normal")
-        title = tk.Label(self.root, text="EXIF Metadata Viewer", 
+        title = tk.Label(header_frame, text="EXIF Metadata Viewer", 
                         font=title_font, bg=THEME['bg_dark'], 
                         fg=THEME['text'], pady=THEME['padding'])
-        title.grid(row=0, column=0, sticky='ew')
+        title.grid(row=0, column=0, sticky='w')
+        
+        # Add clean metadata button
+        self.clean_button = tk.Button(
+            header_frame,
+            text="Clean Metadata",
+            command=self.clean_metadata,
+            bg=THEME['bg_medium'],
+            fg=THEME['text'],
+            activebackground=THEME['bg_light'],
+            activeforeground=THEME['text'],
+            relief=tk.FLAT,
+            state='disabled'  # Initially disabled
+        )
+        self.clean_button.grid(row=0, column=2, sticky='e', padx=THEME['padding'])
         
         # Main container frame
         container = tk.Frame(self.root, bg=THEME['bg_dark'])
         container.grid(row=1, column=0, sticky='nsew', padx=THEME['padding'], 
                       pady=THEME['padding'])
-        container.grid_columnconfigure(0, weight=1)
-        container.grid_rowconfigure(1, weight=1)
+        container.grid_columnconfigure(0, weight=1)  # Image panel
+        container.grid_columnconfigure(1, weight=1)  # Metadata panel
+        container.grid_rowconfigure(0, weight=1)
         
-        # Image area with rounded corners effect
+        # Image panel
         self.image_frame = tk.Frame(container, bg=THEME['bg_medium'],
                                   highlightbackground=THEME['border'],
                                   highlightthickness=1)
         self.image_frame.grid(row=0, column=0, sticky='nsew', 
-                            pady=(0, THEME['padding']))
+                            padx=(0, THEME['padding']/2))
         
         self.image_label = tk.Label(self.image_frame, bg=THEME['bg_medium'],
                                   text="Drop image here",
                                   fg=THEME['text'], height=8)
         self.image_label.pack(fill=tk.BOTH, expand=True, padx=1, pady=1)
         
-        # Metadata area with custom styling
+        # Metadata panel
         metadata_container = tk.Frame(container, bg=THEME['bg_medium'],
                                     highlightbackground=THEME['border'],
                                     highlightthickness=1)
-        metadata_container.grid(row=1, column=0, sticky='nsew')
+        metadata_container.grid(row=0, column=1, sticky='nsew',
+                              padx=(THEME['padding']/2, 0))
         
         # Use a modern monospace font
         self.metadata_text = scrolledtext.ScrolledText(
@@ -172,16 +194,26 @@ class ExifUserCommentRenderer:
         self.extract_and_display_exif(file_path)
         
         self.status_bar.config(text=f"Loaded: {os.path.basename(file_path)}")
+        self.clean_button.config(state='normal')  # Enable the clean button
     
     def display_image(self, file_path):
         """Display the image in the image area"""
         try:
             img = Image.open(file_path)
-            # Calculate aspect ratio for better fit
-            display_width = 500
-            aspect_ratio = img.width / img.height
-            display_height = int(display_width / aspect_ratio)
-            img = img.resize((display_width, display_height), Image.Resampling.LANCZOS)
+            # Calculate aspect ratio for better fit in the side panel
+            display_height = 600  # Maximum height
+            display_width = 500   # Maximum width
+            
+            # Calculate new dimensions maintaining aspect ratio
+            img_ratio = img.width / img.height
+            if img_ratio > display_width/display_height:
+                new_width = display_width
+                new_height = int(display_width / img_ratio)
+            else:
+                new_height = display_height
+                new_width = int(display_height * img_ratio)
+                
+            img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
             
             self.photo_image = ImageTk.PhotoImage(img)
             self.image_label.config(image=self.photo_image, text="")
@@ -214,6 +246,51 @@ class ExifUserCommentRenderer:
         except Exception as e:
             self.metadata_text.delete(1.0, tk.END)
             self.metadata_text.insert(tk.END, f"Error extracting EXIF data: {e}")
+
+    def clean_metadata(self):
+        """Clean the metadata of the current image"""
+        if not self.current_image_path:
+            return
+        
+        try:
+            # Get the parent folder of the current image
+            parent_folder = os.path.dirname(self.current_image_path)
+            
+            # Construct and execute the CLI command
+            cli_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'lego_cli.py')
+            
+            # Create a process that we can interact with, with UTF-8 encoding
+            startupinfo = None
+            if os.name == 'nt':  # Windows
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+            process = subprocess.Popen(
+                ['python', cli_path, 'metadata', 'clean-batch', parent_folder],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                startupinfo=startupinfo
+            )
+            
+            # Send 'Y' to the process
+            stdout, stderr = process.communicate('Y\n')
+            
+            if process.returncode == 0:
+                messagebox.showinfo("Success", "Metadata cleaned successfully.")
+                self.status_bar.config(text="Metadata cleaned successfully.")
+                
+                # Refresh the display
+                self.process_image(self.current_image_path)
+            else:
+                messagebox.showerror("Error", f"Failed to clean metadata: {stderr}")
+                self.status_bar.config(text="Error: Failed to clean metadata")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to clean metadata: {str(e)}")
+            self.status_bar.config(text="Error: Failed to clean metadata")
 
 def main():
     # Check if TkinterDnD is available

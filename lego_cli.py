@@ -55,6 +55,7 @@ import sys
 import logging
 import click
 import time
+import cv2 
 import glob
 import json
 from datetime import datetime
@@ -146,6 +147,7 @@ def display_rich_help():
                 "--image PATH", "--output PATH", "--conf FLOAT",
                 "--save-annotated/--no-save-annotated",
                 "--save-json/--no-save-json",
+                "--save-cropped/--no-save-cropped",
                 "--clean-exif/--no-clean-exif"
             ]),
             ("detect-studs", "Detect studs on LEGO bricks", [
@@ -254,9 +256,11 @@ def cli(debug):
               help='Save annotated images with detection visualization.')
 @click.option('--save-json/--no-save-json', default=False, 
               help='Save detection results as JSON files.')
+@click.option('--save-cropped/--no-save-cropped', default=False,
+              help='Save cropped images of detected bricks.')
 @click.option('--clean-exif/--no-clean-exif', default=False,
               help='Clean EXIF metadata before processing.')
-def detect_bricks_cmd(image, output, conf, save_annotated, save_json, clean_exif):
+def detect_bricks_cmd(image, output, conf, save_annotated, save_json, save_cropped, clean_exif):
     """Detect LEGO bricks in images using the trained model.
     
     This command runs the brick detection model on the specified image(s)
@@ -304,37 +308,13 @@ def detect_bricks_cmd(image, output, conf, save_annotated, save_json, clean_exif
         os.makedirs(img_output, exist_ok=True)
         
         # Run detection
-        if RICH_AVAILABLE:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[bold blue]{task.description}"),
-                BarColumn(),
-                TextColumn("[bold green]{task.completed}/{task.total}"),
-                TimeElapsedColumn(),
-                console=console
-            ) as progress:
-                task = progress.add_task(f"[green]Detecting bricks in {img_name}...", total=100)
-                
-                # Run detection with progress updates
-                progress.update(task, advance=10)
-                result = detect_bricks(
-                    img_path,
-                    conf=conf,
-                    save_json=save_json, 
-                    save_annotated=save_annotated,
-                    output_folder=img_output
-                )
-                progress.update(task, advance=90)
-                
-        else:
-            # Run detection without progress display
-            result = detect_bricks(
-                img_path,
-                conf=conf,
-                save_json=save_json, 
-                save_annotated=save_annotated,
-                output_folder=img_output
-            )
+        result = detect_bricks(
+            img_path,
+            conf=conf,
+            save_json=save_json, 
+            save_annotated=save_annotated,
+            output_folder=img_output
+        )
         
         # Check detection results
         if result is None:
@@ -347,6 +327,21 @@ def detect_bricks_cmd(image, output, conf, save_annotated, save_json, clean_exif
         else:
             logger.info(f"Detected {len(boxes)} bricks in {img_path}")
             
+        # Save cropped detections if requested
+        if save_cropped and result.get("cropped_detections"):
+            crops_folder = output
+            os.makedirs(crops_folder, exist_ok=True)
+            
+            for idx, crop in enumerate(result["cropped_detections"]):
+                crop_path = os.path.join(crops_folder, f"brick_{idx+1}_{img_name}.jpg")
+                cv2.imwrite(crop_path, crop)
+            
+            if RICH_AVAILABLE:
+                console.print(f"[green]Saved {len(result['cropped_detections'])} cropped images to:[/green] {crops_folder}")
+            else:
+                logger.info("💾 Saved %d cropped images to: %s", 
+                           len(result["cropped_detections"]), crops_folder)
+        
         # Save annotated image if requested
         if save_annotated:
             annotated_path = os.path.join(img_output, "annotated_image.jpg")
