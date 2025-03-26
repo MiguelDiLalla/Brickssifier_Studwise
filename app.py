@@ -17,7 +17,7 @@ from click.testing import CliRunner
 
 # Page config
 st.set_page_config(
-    page_title="LEGO Bricks ML Vision Demo",
+    page_title="🧱 LEGO Bricks ML Vision Demo",
     page_icon="🧊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -25,28 +25,28 @@ st.set_page_config(
 
 # Sidebar content
 st.sidebar.image("presentation/logo.png")
-st.sidebar.title("About")
+st.sidebar.title("👋 About")
 st.sidebar.markdown("""
-### Professional Profile
+### 👨‍💻 Professional Profile
 - 🔬 Aspiring Junior Data Scientist
 - 🤖 Machine Learning & Computer Vision
 - 🎯 Focus on Deep Learning Applications
 
-### Connect with Me
+### 🔗 Connect with Me
 [![GitHub](https://img.shields.io/badge/GitHub-Profile-blue?style=for-the-badge&logo=github)](https://github.com/MiguelDiLalla)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Profile-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/MiguelDiLalla)
 
-### Project Repository
+### 📚 Project Repository
 [![View on GitHub](https://img.shields.io/badge/GitHub-View_Repository-blue?style=for-the-badge&logo=github)](https://github.com/MiguelDiLalla/LEGO_Bricks_ML_Vision)
 """)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
-### About This Project
+### 🎯 About This Project
 This demo showcases a computer vision system that:
-1. Detects LEGO bricks in images
-2. Identifies individual studs
-3. Classifies brick dimensions
+1. 🔍 Detects LEGO bricks in images
+2. 🎯 Identifies individual studs
+3. 📏 Classifies brick dimensions
 """)
 
 # Function to load test images based on tab type
@@ -296,10 +296,10 @@ def clean_test_images_metadata(tab_type):
             test_folder = "presentation/Test_images/StudsPics"
             
         # Use CLI runner to clean metadata with --force flag to skip confirmation
-        runner = CliRunner()
+        runner = CliRunner(mix_stderr=False)  # Add mix_stderr=False
         result = runner.invoke(lego_cli.cli, ["metadata", "clean-batch", "--force", test_folder])
         if result.exit_code != 0:
-            st.error(f"Failed to clean metadata: {result.output}")
+            st.error(f"Failed to clean metadata: {result.stdout}")
 
 # Function to create tab content
 def create_tab_content(tab_name):
@@ -315,11 +315,12 @@ def create_tab_content(tab_name):
         col2, col1 = st.columns([1, 1])
         
         with col1:
-            st.subheader("Input Image")
+            
+            st.subheader("📤 Input Your Own Image")
             
             # Drag and drop zone
             uploaded_file = st.file_uploader(
-                f"Drag and drop an image for {tab_name}", 
+                f"📎 Drag and drop an image for {tab_name}", 
                 type=['jpg', 'jpeg', 'png'], 
                 key=f"uploader_{tab_name}"
             )
@@ -364,8 +365,8 @@ def create_tab_content(tab_name):
                 tab_type = "dimension"
             else:
                 tab_type = "brick"
-            
-            st.subheader("Or Select from Gallery")
+
+            st.subheader("🖼️ Select from Gallery")
             test_images, captions = load_test_images(tab_type)
             
             selected_image = None
@@ -424,11 +425,14 @@ def create_tab_content(tab_name):
                             selected_image = test_images[img_idx]
                             caption = captions[img_idx]
 
+            
+            
+
         with col2:
-            st.subheader("Results")
+            st.subheader("✨ Results")
             result_placeholder = st.empty()
 
-            if st.button("Process Image", key=f"process_{tab_name}", use_container_width=True):
+            if st.button("🔄 Process Image", key=f"process_{tab_name}", use_container_width=True):
                 if selected_image:
                     with st.spinner('Processing image...'):
                         # Get image data from either upload or gallery
@@ -548,8 +552,8 @@ def create_tab_content(tab_name):
 
             # Show virtual folder contents
             if st.session_state['virtual_outputs'][tab_name]['images']:
-                with st.expander("Previous Results", expanded=False):
-                    st.subheader("Processing History")
+                with st.expander("📂 Previous Results", expanded=False):
+                    st.subheader("📅 Processing History")
                     for idx, img_data in enumerate(reversed(st.session_state['virtual_outputs'][tab_name]['images'])):
                         # Create a container for each result
                         with st.container():
@@ -579,17 +583,17 @@ def create_tab_content(tab_name):
                                 st.markdown("---")
 
             # Help text
-            with st.expander("How to use this demo"):
+            with st.expander("❓ How to use this demo"):
                 st.markdown(f"""
-                1. Upload your own image or select one of the test images from the gallery
-                2. Click 'Process Image' to run {tab_name.lower()}
-                3. View the results and detection metadata
+                1. 📤 Upload your own image or select one from the gallery
+                2. 🔄 Click 'Process Image' to run {tab_name.lower()}
+                3. 📊 View the results and detection metadata
                 """)
             
             # Show selected image preview at the bottom of col2
             if selected_image:
                 st.markdown("---")
-                st.subheader("Selected Image")
+                st.subheader("🖼️ Selected Image")
                 if isinstance(selected_image, st.runtime.uploaded_file_manager.UploadedFile):
                     st.image(selected_image, caption="Uploaded Image", use_container_width=True)
                 elif isinstance(selected_image, BytesIO):
@@ -602,10 +606,10 @@ def create_tab_content(tab_name):
 def main():
     # Create tabs
     tab1, tab2, tab3, tab4 = st.tabs([
-        "Brick Detection", 
-        "Stud Detection", 
-        "Dimension Classification",
-        "Multiclass DEMO"
+        "🔍 Brick Detection", 
+        "🎯 Stud Detection", 
+        "📏 Dimension Classification",
+        "🎨 Multiclass DEMO"
     ])
     
     with tab1:
@@ -622,7 +626,7 @@ def main():
     
     # Footer
     st.markdown("---")
-    st.markdown("Made with ❤️ using Streamlit • [Source Code](https://github.com/MiguelDiLalla/LEGO_Bricks_ML_Vision)")
+    st.markdown("Made with ❤️ using Streamlit • [🔗 Source Code](https://github.com/MiguelDiLalla/LEGO_Bricks_ML_Vision)")
 
 if __name__ == "__main__":
     main()
