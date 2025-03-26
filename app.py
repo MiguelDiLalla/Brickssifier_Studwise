@@ -8,6 +8,7 @@ from io import BytesIO
 import json
 from streamlit_image_select import image_select
 import base64
+import random
 
 # Import the CLI interface
 import sys
@@ -366,7 +367,7 @@ def create_tab_content(tab_name):
             else:
                 tab_type = "brick"
 
-            st.subheader("🖼️ Select from Gallery")
+            st.subheader("🖼️ Or Select from Gallery")
             test_images, captions = load_test_images(tab_type)
             
             selected_image = None
@@ -404,13 +405,18 @@ def create_tab_content(tab_name):
                     if uploaded_file is not None:
                         gallery_key += "_with_upload"
                     
+                    # Initialize random selection if not already set
+                    if gallery_key not in st.session_state:
+                        st.session_state[gallery_key] = random.randint(0, len(gallery_images)-1)
+                    
                     selected_idx = image_select(
                         "Select an image from the gallery",
                         images=gallery_images,
                         captions=gallery_captions,
                         use_container_width=True,
                         return_value="index",
-                        key=gallery_key
+                        key=gallery_key,
+                        index=st.session_state[gallery_key]  # Set initial selection
                     )
                     
                     # Handle selection
@@ -432,7 +438,7 @@ def create_tab_content(tab_name):
             st.subheader("✨ Results")
             result_placeholder = st.empty()
 
-            if st.button("🔄 Process Image", key=f"process_{tab_name}", use_container_width=True):
+            if st.button("🔄 START INFERENCE", key=f"process_{tab_name}", use_container_width=True):
                 if selected_image:
                     with st.spinner('Processing image...'):
                         # Get image data from either upload or gallery
@@ -493,7 +499,7 @@ def create_tab_content(tab_name):
                                         time_str = metadata["processing_time"]
                                         if isinstance(time_str, str) and time_str.endswith('s'):
                                             time_str = time_str[:-1]  # Remove 's' suffix
-                                        metric_cols[2].metric("Processing Time", f"{float(time_str):.2f}s")
+                                        metric_cols[2].metric("Processing Time", f"{float(time_str)::.2f}s")
 
                                     # 2. Detection Details Table
                                     if "boxes_coordinates" in metadata:
