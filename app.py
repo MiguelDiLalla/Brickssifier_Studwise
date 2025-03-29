@@ -24,6 +24,35 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Add horizontal banner image with CSS-injected styling
+banner_image = base64.b64encode(
+    open("presentation/StreamlitApp_Resources/LegoFigurinesHeader.jpg", "rb").read()
+).decode()
+
+st.markdown(
+    f"""
+    <style>
+    .banner-container {{
+        width: 100%;
+        margin-bottom: 1.5rem;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    }}
+    .banner-container img {{
+        width: 100%;
+        height: auto;
+        object-fit: cover;
+        display: block;
+    }}
+    </style>
+    <div class="banner-container">
+        <img src="data:image/jpeg;base64,{banner_image}" alt="LEGO Header Banner">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 # Sidebar content
 st.sidebar.image("presentation/logo.png")
 st.sidebar.title("👋 About")
@@ -470,7 +499,7 @@ def create_tab_content(tab_name):
                                 st.session_state['virtual_outputs'][tab_name]['images'].append({
                                     'name': f"result_{time.strftime('%Y%m%d_%H%M%S')}.jpg",
                                     'data': img_byte_arr.getvalue(),
-                                    'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+                                    'timestamp': time.strftime("%Y%m%d_%H%M%S"),
                                     'metadata': metadata
                                 })
                             else:
@@ -499,7 +528,7 @@ def create_tab_content(tab_name):
                                         time_str = metadata["processing_time"]
                                         if isinstance(time_str, str) and time_str.endswith('s'):
                                             time_str = time_str[:-1]  # Remove 's' suffix
-                                        metric_cols[2].metric("Processing Time", f"{float(time_str)::.2f}s")
+                                        metric_cols[2].metric("Processing Time", f"{float(time_str):.2f}s")
 
                                     # 2. Detection Details Table
                                     if "boxes_coordinates" in metadata:
