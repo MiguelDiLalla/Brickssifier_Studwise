@@ -54,30 +54,92 @@ st.markdown(
 )
 
 # Sidebar content
-st.sidebar.image("presentation/logo.png")
-st.sidebar.title("👋 About")
-st.sidebar.markdown("""
-### 👨‍💻 Professional Profile
-- 🔬 Aspiring Junior Data Scientist
-- 🤖 Machine Learning & Computer Vision
-- 🎯 Focus on Deep Learning Applications
+st.sidebar.image("presentation/Logo.jpg")
+# Redesigned sidebar using HTML+CSS with Google Fonts
+sidebar_html = """
+<link href="https://fonts.googleapis.com/css2?family=Lexend+Deca&family=Montagu+Slab:wght@500&display=swap" rel="stylesheet">
+<style>
+.sidebar-panel {
+background-color: #ffffff; /* Changed to white background */
+padding: 1.5rem;
+border-radius: 12px;
+box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+margin-top: 1rem;
+}
+.sidebar-container {
+font-family: 'Lexend Deca', sans-serif;
+color: #333;
+}
+.sidebar-title {
+font-family: 'Montagu Slab', serif;
+font-size: 1.7rem;
+font-weight: bold;
+color: #333;
+margin-bottom: 0.2rem;
+}
+.sidebar-subtitle {
+font-size: 1rem;
+color: #666;
+margin-bottom: 1rem;
+}
+.sidebar-links {
+margin: 1rem 0;
+}
+.sidebar-links a {
+text-decoration: none;
+color: #0b7285;
+display: block;
+margin: 0.3rem 0;
+font-weight: 500;
+}
+.sidebar-links a:hover {
+text-decoration: underline;
+}
+.sidebar-section {
+background-color: #1a1a1a; /* Changed to black background */
+padding: 0.8rem 1rem;
+border-left: 4px solid #ffa94d;
+border-radius: 8px;
+margin: 1rem 0;
+font-size: 0.95rem;
+line-height: 1.5;
+color: #ffffff; /* Changed to white text */
+}
+.sidebar-footer {
+font-style: italic;
+font-size: 0.85rem;
+color: #888;
+margin-top: 2rem;
+}
+</style>
 
-### 🔗 Connect with Me
-[![GitHub](https://img.shields.io/badge/GitHub-Profile-blue?style=for-the-badge&logo=github)](https://github.com/MiguelDiLalla)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Profile-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/MiguelDiLalla)
+<div class="sidebar-panel">
+<div class="sidebar-container">
+<div class="sidebar-title">Welcome! <br> This is the Project's DEMO site.</div>
+<div class="sidebar-subtitle">Use the available test images, <br>but you can also upload your own.</div>
 
-### 📚 Project Repository
-[![View on GitHub](https://img.shields.io/badge/GitHub-View_Repository-blue?style=for-the-badge&logo=github)](https://github.com/MiguelDiLalla/LEGO_Bricks_ML_Vision)
-""")
+<div class="sidebar-links">
+    <a href="https://migueldilalla.github.io" target="_blank">🌐 Portfolio</a>
+    <a href="https://github.com/MiguelDiLalla" target="_blank">🐱 GitHub</a>
+    <a href="https://linkedin.com/in/MiguelDiLalla" target="_blank">💼 LinkedIn</a>
+</div>
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("""
-### 🎯 About This Project
-This demo showcases a computer vision system that:
-1. 🔍 Detects LEGO bricks in images
-2. 🎯 Identifies individual studs
-3. 📏 Classifies brick dimensions
-""")
+<div class="sidebar-section">
+    <strong>About This Demo</strong><br>
+    A playful ML case study teaching machines to recognize LEGO bricks.<br>
+    Powered by YOLOv8, geometric logic, and a handcrafted CLI.
+</div>
+
+<div class="sidebar-footer">
+    Made with ❤️ by Miguel Di Lalla<br>
+    "I study with the tools of the future to earn my place in the present."
+</div>
+</div>
+</div>
+"""
+
+st.sidebar.markdown(sidebar_html, unsafe_allow_html=True)
+
 
 # Function to load test images based on tab type
 @st.cache_data
@@ -464,7 +526,7 @@ def create_tab_content(tab_name):
             
 
         with col2:
-            st.subheader("✨ Results")
+            st.subheader("🔮 Results will appear here")
             result_placeholder = st.empty()
 
             if st.button("🔄 START INFERENCE", key=f"process_{tab_name}", use_container_width=True):
@@ -639,25 +701,25 @@ def create_tab_content(tab_name):
 
 # Main app
 def main():
-    # Create tabs
+    # Create tabs with Dimension Classification first
     tab1, tab2, tab3, tab4 = st.tabs([
-        "🔍 Brick Detection", 
-        "🎯 Stud Detection", 
-        "📏 Dimension Classification",
-        "🎨 Multiclass DEMO"
+        "📏 The Dimension Classification",
+        "🔍 JUST Brick Detection", 
+        "🎯 JUST Stud Detection", 
+        "🎨 DEMO Multiclass"
     ])
     
     with tab1:
-        create_tab_content("Brick Detection")
+        create_tab_content("Dimension Classification")
     
     with tab2:
-        create_tab_content("Stud Detection")
+        create_tab_content("Brick Detection")
     
     with tab3:
-        create_tab_content("Dimension Classification")
+        create_tab_content("Stud Detection")
 
     with tab4:
-        create_tab_content("Multiclass DEMO")  # Add new tab
+        create_tab_content("Multiclass DEMO")
     
     # Footer
     st.markdown("---")

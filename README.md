@@ -1,99 +1,134 @@
-# 🧱 LEGO Bricks ML Vision
-
-A computer vision portfolio project demonstrating ML-powered LEGO brick detection and classification.
 
 ![Hero Banner](presentation/HeroBanner.jpg)
 
-## 🎯 Project Overview
+# 🧱 Project: Brickssifier_Studwise
 
-This project showcases a hybrid approach to LEGO brick recognition combining deep learning and classical computer vision techniques. It demonstrates:
+> *It classifies bricks. Imperfectly. Passionately.*
 
-- 🔍 **Brick Detection**: YOLOv8-based model to identify LEGO bricks in images
-- 📍 **Stud Detection**: Specialized model for detecting individual studs on bricks
-- 📐 **Dimension Classification**: Algorithm to determine brick dimensions from stud patterns
-- 🖼️ **Rich Output**: Annotated images with embedded metadata and repository links
+A portfolio case study on teaching machines to identify LEGO bricks — blending deep learning with playful engineering, and showcasing rapid technical growth.
 
-## 🛠️ Technical Stack
+---
 
-- **Deep Learning**: PyTorch, Ultralytics YOLOv8
-- **Computer Vision**: OpenCV, Pillow (PIL)
-- **CLI Interface**: Rich, Click
-- **Data Processing**: Albumentations, NumPy
-- **Metadata Handling**: EXIF UserComment tags
-- **Development**: Python 3.10+, Git
+## 📌 Overview
 
-## 📦 Project Structure
+This project is a self-contained demonstration of end-to-end ML development, focusing on LEGO brick detection and classification. It combines:
+
+- Object detection (YOLOv8)
+- Keypoint detection (studs)
+- Custom pattern-based classification
+- Rich CLI and Streamlit deployment
+
+It’s also a personal milestone: a hands-on transition from hospitality to tech, executed with minimal resources and maximum curiosity.
+
+---
+
+## ⚡ Quick Links
+
+- 🧠 [Technical Utility API Guide](docs/Util_API_guide.md)
+- 💻 [Command Line Interface Guide](docs/Lego_CLI_Guide.md)
+- 📖 [Project Story & Development Timeline](docs/Storyline_Project_Storytell.md)
+- 📊 **[Streamlit DEMO (try it!)](https://placeholder.streamlit.app)**
+  - ⚠️ May take up to 1–2 minutes to load (free-tier cold start)
+- 🧪 **[Kaggle Project Page (coming soon)](https://kaggle.com/placeholder)**
+  - Includes: notebooks for YOLOv8 training, evaluation, and the 3 datasets used.
+
+---
+
+## 🎯 Motivation
+
+This project was born from a single question:
+
+> *"If I can instinctively recognize a LEGO brick, can I teach a machine to do it too?"*
+
+The answer led to the creation of a hybrid detection pipeline, extensive CLI tooling, and a public demo. It also serves as my first full-stack ML project — built from scratch, piece by piece.
+
+---
+
+## 📁 Repository Structure (Key Elements)
 
 ```
-├── data/               # Dataset organization
-├── models/            # Trained YOLOv8 models
-├── utils/             # Core utilities
-│   ├── data_utils.py      # Dataset processing
-│   ├── detection_utils.py # ML inference
+├── lego_cli.py            # Main CLI interface
+├── utils/                 # Core utility modules
+│   ├── detection_utils.py     # ML inference logic
+│   ├── classification_utils.py # Stud-based dimension inference
 │   └── ...
-├── docs/              # Comprehensive guides
-├── notebooks/         # Development notebooks
-└── lego_cli.py       # CLI interface
+├── docs/                 # Project documentation
+├── notebooks/            # YOLOv8 training notebooks (to be uploaded)
+├── presentation/         # Hero image, visuals, QR frames
+├── results/              # Annotated inference outputs
+└── README.md
 ```
 
-## 🚀 Key Features
+> 🗂️ Full reference in the [CLI Guide](docs/Lego_CLI_Guide.md) and [Utils API Guide](docs/Util_API_guide.md)
 
-### Training Pipeline
-1. Dataset preparation and augmentation
-2. YOLOv8 model training configuration
-3. Automated training for brick/stud detection
-4. Model evaluation and export
+---
 
-### Inference Pipeline
-1. Input image processing
-2. Brick detection and cropping
-3. Stud detection within crops
-4. Dimension classification via stud pattern
-5. Rich output generation with metadata
+## 🧠 How It Works (Pipeline Summary)
 
-## 💻 Getting Started
+1. Detect bricks in the image using a YOLOv8 model
+2. Crop and analyze individual brick regions
+3. Detect studs using a second YOLOv8 model
+4. Analyze stud pattern with geometric logic
+5. Predict brick dimensions and embed metadata
 
-### Prerequisites
+Includes optional EXIF tagging and visual output framing.
+
+---
+
+## 🧪 Training and Data
+
+Model training and dataset curation were done on **Kaggle Notebooks**, using:
+- 3 custom LEGO datasets (bricks, studs, and synthetic composites)
+- Data augmentation with Albumentations
+- Fine-tuning pretrained YOLOv8n models
+
+📌 *Links to the notebooks and datasets will be added to the Kaggle project page.*
+
+---
+
+## 🖥️ Using the Project
+
+### 🔧 CLI (Recommended)
 ```bash
-python -m pip install -r requirements.txt
+# Detect a brick from image
+python lego_cli.py infer --image input.jpg --save-annotated
+
+# Run batch processing
+python lego_cli.py batch-inference --input folder/ --output results/
 ```
+More in [CLI Guide](docs/Lego_CLI_Guide.md).
 
-### Basic Usage
-```bash
-# Run inference on an image
-python lego_cli.py detect image.jpg
+### 🖼️ Streamlit App
+Try it online: **[Streamlit DEMO](https://placeholder.streamlit.app)**
 
-# Train a new model
-python lego_cli.py train --config configs/train_config.yaml
-```
+---
 
-## 📚 Documentation
+## 🧩 Development Timeline (Summary)
 
-- [Training Guide](docs/Training_API_Guide.md)
-- [Utils Guide](docs/ProjectUtilsGuide.md)
-- [CLI Guide](docs/Technical_CLI_Guide.md)
-- [Project Story](docs/Storyline_Project_Storytell.md)
+| Phase | Highlights |
+|-------|-----------|
+| **1. Ideation** | Inspired by childhood LEGO play & engineering instinct |
+| **2. Dataset Prep** | 27 brick classes, ~2000 images, manual annotation |
+| **3. Detection** | YOLOv8 fine-tuning for bricks and studs |
+| **4. Classification** | Custom geometry algorithm based on stud layout |
+| **5. CLI Design** | Fully documented with Rich-based UX |
+| **6. Demo Deployment** | Streamlit frontend + EXIF metadata tagging |
 
-## 🎯 Project Goals
+Full story: [Project Story](docs/Storyline_Project_Storytell.md)
 
-1. **Technical Demonstration**: Showcase ML/CV skills through a real-world application
-2. **Learning Portfolio**: Document the journey from concept to implementation
-3. **Code Quality**: Demonstrate software engineering best practices
-4. **User Experience**: Create an engaging and accessible tool
+---
 
-## 📊 Technologies Learned
+## ❤️ Thank You for Reading!
 
-- YOLOv8 model training and optimization
-- Hybrid ML approaches (deep learning + classical algorithms)
-- CLI development with Rich/Click
-- Professional documentation practices
-- Data pipeline automation
-- Testing and validation strategies
+This project marks a transition point in my career and a personal victory in learning how to think like an engineer.
 
-## 📝 License
+> If you enjoyed exploring this project or see potential in my work, don’t hesitate to reach out.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+🔗 [Visit my website](https://migueldilalla.github.io/)  
+💼 [Connect on LinkedIn](https://www.linkedin.com/in/MiguelDiLalla/)  
+📨 Or open an issue / star the repo if you'd like to collaborate!
 
-## 🤝 Connect
+---
 
-Created by [Miguel Di Lalla](https://www.linkedin.com/in/MiguelDiLalla) - Feel free to connect!
+© Miguel Di Lalla — LEGO® is a trademark of the LEGO Group, which does not sponsor or endorse this project.
+
