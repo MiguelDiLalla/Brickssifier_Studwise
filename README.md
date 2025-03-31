@@ -2,7 +2,7 @@
 
 A computer vision portfolio project demonstrating ML-powered LEGO brick detection and classification.
 
-![Project Logo](Project_Logo.png)
+![Hero Banner](presentation/HeroBanner.jpg)
 
 ## 🎯 Project Overview
 
