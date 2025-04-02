@@ -1,5 +1,5 @@
 
-![Hero Banner](presentation/HeroBanner.jpg)
+![Hero Banner](https://migueldilalla.github.io/assets/branding-elements/brickssifier-herobanner.jpg)
 
 # 🧱 Project: Brickssifier_Studwise
 
@@ -18,7 +18,7 @@ This project is a self-contained demonstration of end-to-end ML development, foc
 - Custom pattern-based classification
 - Rich CLI and Streamlit deployment
 
-It’s also a personal milestone: a hands-on transition from hospitality to tech, executed with minimal resources and maximum curiosity.
+It's also a personal milestone: a hands-on transition from hospitality to tech, executed with minimal resources and maximum curiosity.
 
 ---
 
@@ -122,7 +122,7 @@ Full story: [Project Story](docs/Storyline_Project_Storytell.md)
 
 This project marks a transition point in my career and a personal victory in learning how to think like an engineer.
 
-> If you enjoyed exploring this project or see potential in my work, don’t hesitate to reach out.
+> If you enjoyed exploring this project or see potential in my work, don't hesitate to reach out.
 
 🔗 [Visit my website](https://migueldilalla.github.io/)  
 💼 [Connect on LinkedIn](https://www.linkedin.com/in/MiguelDiLalla/)  
