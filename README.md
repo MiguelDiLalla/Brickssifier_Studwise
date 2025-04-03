@@ -126,6 +126,57 @@ Full story: [Project Story](docs/Storyline_Project_Storytell.md)
 
 ---
 
+## 🌱 Antecedents, Inspiration & Future Aspirations
+
+### Antecedents: Standing on Giants' Shoulders
+
+This project is inspired by several notable LEGO recognition systems developed over the years. From hardware-based solutions like Piqabrick to comprehensive AI systems like Brickognize, each has contributed to advancing the field of LEGO part recognition.
+
+After researching existing solutions, I was particularly drawn to the possibility of combining deep learning with domain-specific knowledge about LEGO bricks. The stud pattern approach was inspired by how humans naturally identify bricks - we often count studs to determine dimensions.
+
+### Comparative Landscape
+
+| Project | Developer | Parts Coverage | Technology | Unique Approach | Scale |
+|---------|-----------|----------------|------------|-----------------|-------|
+| **Brickssifier** | Miguel Di Lalla (self-taught) | ~50 basic bricks | YOLOv8 + stud keypoints | Stud pattern classification | Individual portfolio project |
+| Brickognize | Tramacsoft (company) | ~85,000 parts & sets | Mask R-CNN + image search | Synthetic data generation | Commercial product with team |
+| BrickIt | BrickIt App (startup) | Est. thousands | Mobile CNN | Real-time pile analysis | Venture-backed mobile app |
+| RebrickNet | Rebrickable (platform) | ~300 parts | CNN object detector | Community-sourced data | Platform feature with user base |
+
+### My Approach & Honest Scale
+
+As a self-taught developer transitioning from hospitality to tech, I designed Brickssifier with two goals:
+
+1. **Learning showcase**: Demonstrate end-to-end ML development skills from data to deployment
+2. **Novel contribution**: The stud-detection approach offers high accuracy for basic bricks while requiring less training data
+
+While commercial solutions like Brickognize cover nearly the entire LEGO catalog with teams of engineers, Brickssifier focuses on a more modest but thoroughly executed scope. This deliberate limitation allowed me to implement a complete system with polish and documentation that would be challenging for a solo developer to achieve at larger scale.
+
+### Future Aspirations
+
+This project represents my first stepping stone in ML development, with several planned growth paths:
+
+1. **Technical expansion**: 
+   - Extend coverage to non-studded parts (tiles, slopes, Technic)
+   - Implement multi-part detection in cluttered scenes
+   - Experiment with on-device optimization for mobile deployment
+
+2. **Integration possibilities**:
+   - Create plugins for inventory management systems
+   - Develop an open API for community applications
+   - Explore collaboration with other LEGO ML projects
+
+3. **Knowledge sharing**:
+   - Document the complete development journey to help other self-taught developers
+   - Contribute to open datasets and benchmarks
+   - Package components as reusable libraries
+
+My goal is to continue evolving both this project and my technical skills, using each iteration as a stepping stone toward professional growth in data science and ML engineering.
+
+> *"Every model is a draft of a better model to come."*
+
+---
+
 ## ❤️ Thank You for Reading!
 
 This project marks a transition point in my career and a personal victory in learning how to think like an engineer.
